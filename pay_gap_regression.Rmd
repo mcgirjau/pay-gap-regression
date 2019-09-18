@@ -43,17 +43,15 @@ options(scipen = 1)
 <!-- Get the data into the format needed for analysis. Any time in other sections that you realize your data should actually look a different way (e.g, maybe you decide you really want to collapse a categorical variable or something), make sure to come back to this section to implement that change from the beginning. This will be an iterative process! -->
 
 ```{r, import}
-# Read in dataset
+# Reading in the dataset
 acs_sample_raw <- read_csv("data/acs230_3k.csv")
 ```
 
 ```{r, variables}
-# Wrangle the data
+# Wrangling the data
 acs_sample <- acs_sample_raw %>%
-  # select which variables to keep
-  select() %>%
-  mutate() %>%
-  filter()
+  # selecting which variables to keep
+  select()
 ```
 
 # Data exploration
