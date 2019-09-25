@@ -4,20 +4,22 @@ author: "Maria-Cristiana Gîrjău"
 date: "Revised on 2019-09-20"
 output: 
   pdf_document:
-    fig_height: 2
-    fig_width: 3.5
+    fig_height: 4
+    fig_width: 6
     df_print: kable
 ---
 
 ```{r, setup, include=FALSE}
 # Loading necessary packages
 require(readr)
+require(mosaic)
 require(dplyr)
 require(ggplot2)
 require(forcats)
 require(stringr)
 require(purrr)
 require(kableExtra)
+require(data.table)
 
 # Setting default chunk and display options
 knitr::opts_chunk$set(
@@ -45,22 +47,20 @@ options(scipen = 1)
 
 <!-- Get the data into the format needed for analysis. Any time in other sections that you realize your data should actually look a different way (e.g, maybe you decide you really want to collapse a categorical variable or something), make sure to come back to this section to implement that change from the beginning. This will be an iterative process! -->
 
-```{r, import}
-# Reading in the dataset
-acs_sample_raw <- read_csv("data/acs230_3k.csv")
+```{r, import2}
+acs_sample_raw_small <- read_csv("data/acs230_3k.csv")
 ```
 
-```{r, factors}
+```{r, factors, include=FALSE}
 # setting factor levels
+sex_levels <- c(M = "1",
+                "F" = "2")
 
-sex_levels <- c(male = "1",
-                female = "2")
-
-citizenship_levels <- c(US_born = "1",
-                        territories_born = "2",
-                        aborad_born = "3",
+citizenship_levels <- c("US born" = "1",
+                        "territories born" = "2",
+                        "aborad born" = "3",
                         naturalized = "4",
-                        not_citizen = "5")
+                        "not a citizen" = "5")
 
 race_levels <- c(white = "1",
                   black = "2",
@@ -68,7 +68,7 @@ race_levels <- c(white = "1",
                   native = "4",
                   native = "5",
                   asian = "6",
-                  pacific_islander = "7",
+                  "pacific islander" = "7",
                   other = "8",
                   multiple = "9")
 
@@ -78,42 +78,36 @@ military_levels <- c(active = "1",
                      training = "3",
                      never = "4")
 
-disabled_levels <- c(yes = "1",
-                       no = "2")
-
 married_levels <- c(married = "1",
                     widowed = "2",
                     divorced = "3",
                     separated = "4",
-                    never = "5")
+                    single = "5")
 
-children_age_levels <- c(under_six = "1",
-                         above_six = "2",
+children_age_levels <- c("under six" = "1",
+                         "above six" = "2",
                          both = "3",
                          none = "4")
-
-gave_birth_levels <- c(yes = "1",
-                       no = "2")
 
 education_levels <- c(none = "1",
                       preschool = "2",
                       kindergarten = "3",
-                      grade_1 = "4",
-                      grade_2 = "5",
-                      grade_3 = "6",
-                      grade_4 = "7",
-                      grade_5 = "8",
-                      grade_6 = "9",
-                      grade_7 = "10",
-                      grade_8 = "11",
-                      grade_9 = "12",
-                      grade_10 = "13",
-                      grade_11 = "14",
-                      grade_12 = "15",
-                      high_school = "16",
+                      "grade 1" = "4",
+                      "grade 2" = "5",
+                      "grade 3" = "6",
+                      "grade 4" = "7",
+                      "grade 5" = "8",
+                      "grade 6" = "9",
+                      "grade 7" = "10",
+                      "grade 8" = "11",
+                      "grade 9" = "12",
+                      "grade 10" = "13",
+                      "grade 11" = "14",
+                      "grade 12" = "15",
+                      "high school" = "16",
                       GED = "17",
-                      college_one_year_less = "18",
-                      college_one_year_more = "19",
+                      "less than one year of college" = "18",
+                      "more than one year of college" = "19",
                       associate = "20",
                       bachelor = "21",
                       master = "22",
@@ -122,95 +116,89 @@ education_levels <- c(none = "1",
 
 degree_levels <- c()
 
-stem_degree_levels <- c(yes = "1",
-                        no = "2")
-
-employment_levels <- c(employed_working = "1",
-                       employed_not_working = "2",
+employment_levels <- c("employed working" = "1",
+                       "employed not working" = "2",
                        unemployed = "3",
-                       military_working = "4",
-                       military_not_working = "5",
-                       not_in_labor_force = "6")
+                       "military working" = "4",
+                       "military not working" = "5",
+                       "not in labor force" = "6")
 
 worker_class_levels <- c()
 
-region_levels <- c(northeast = "1",
-                   midwest = "2",
-                   south = "3",
-                   west = "4",
-                   puerto_rico = "9")
+region_levels <- c(Northeast = "1",
+                   Midwest = "2",
+                   South = "3",
+                   West = "4",
+                   "Puerto Rico" = "9")
 
-state_levels <- c(Alabama = "1",
-                  Alaska = "2",
-                  Arizona = "4",
-                  Arkansas = "5",
-                  California = "6",
-                  Colorado = "8",
-                  Connecticut = "9",
-                  Delaware = "10",
-                  District_of_Columbia = "11",
-                  Florida = "12",
-                  Georgia = "13",
-                  Hawaii = "15",
-                  Idaho = "16",
-                  Illinois = "17",
-                  Indiana = "18",
-                  Iowa = "19",
-                  Kansas = "20",
-                  Kentucky = "21",
-                  Louisiana = "22",
-                  Maine = "23",
-                  Maryland = "24",
-                  Massachusetts = "25",
-                  Michigan = "26",
-                  Minnesota = "27",
-                  Mississippi = "28",
-                  Missouri = "29",
-                  Montana = "30",
-                  Nebraska = "31",
-                  Nevada = "32",
-                  New_Hampshire = "33",
-                  New_Jersey = "34",
-                  New_Mexico = "35",
-                  New_York = "36",
-                  North_Carolina = "37",
-                  North_Dakota = "38",
-                  Ohio = "39",
-                  Oklahoma = "40",
-                  Oregon = "41",
-                  Pennsylvania = "42",
-                  Rhode_Island = "44",
-                  South_Carolina = "45",
-                  South_Dakota = "46",
-                  Tennessee = "47",
-                  Texas = "48",
-                  Utah = "49",
-                  Vermont = "50",
-                  Virginia = "51",
-                  Washington = "53",
-                  West_Virginia = "54",
-                  Wisconsin = "55",
-                  Wyoming = "56",
-                  Puerto_Rico = "72")
+state_levels <- c(AL = "1",
+                  AK = "2",
+                  AZ = "4",
+                  AR = "5",
+                  CA = "6",
+                  CO = "8",
+                  CT = "9",
+                  DE = "10",
+                  DC = "11",
+                  FL = "12",
+                  GA = "13",
+                  HI = "15",
+                  ID = "16",
+                  IL = "17",
+                  IN = "18",
+                  IA = "19",
+                  KS = "20",
+                  KY = "21",
+                  LA = "22",
+                  ME = "23",
+                  MD = "24",
+                  MA = "25",
+                  MI = "26",
+                  MN = "27",
+                  MS = "28",
+                  MO = "29",
+                  MT = "30",
+                  NE = "31",
+                  NV = "32",
+                  NH = "33",
+                  NJ = "34",
+                  NM = "35",
+                  NY = "36",
+                  NC = "37",
+                  ND = "38",
+                  OH = "39",
+                  OK = "40",
+                  OR = "41",
+                  PA = "42",
+                  RI = "44",
+                  SC = "45",
+                  SD = "46",
+                  TN = "47",
+                  TX = "48",
+                  UT = "49",
+                  VT = "50",
+                  VA = "51",
+                  WA = "53",
+                  WV = "54",
+                  WI = "55",
+                  WY = "56",
+                  "Puerto Rico" = "72")
 
 ```
 
 ```{r, variables}
 # Wrangling the data
-acs_sample <- acs_sample_raw %>%
+acs_sample <- acs_sample_raw_small %>%
   
   mutate(ADJINC.x = ADJINC.x / 10^6, # adding decimal point to ADJINC
-         HINCP = HINCP * ADJINC.x, # adjusting dollar amounts for inflation
-         WAGP = WAGP * ADJINC.x, # adjusting dollar amounts for inflation
-         SEMP = SEMP * ADJINC.x, # adjusting dollar amounts for inflation
-         hours_worked = WKHP * WKW) %>% # total number of hours worked
+         WAGP = WAGP * ADJINC.x) %>% # adjusting dollar amounts for inflation
   
   # selecting which variables to keep
   select(SEX, AGEP, CIT, RAC1P, MIL, DIS, # general demographics
          MAR, HUPARC, NRC, FER, # family and household
          SCHL, FOD1P, FOD2P, SCIENGP, # educational background
-         ESR, COW, hours_worked, NAICSP, # employment
-         HINCP, WAGP, # income
+         ESR, COW, WKW, WKHP, NAICSP, # employment
+         WAGP, # income
          REGION.x, ST.x) %>% # location
   
   # renaming the variables
@@ -230,8 +218,9 @@ acs_sample <- acs_sample_raw %>%
          stem_degree = SCIENGP,
          employment = ESR,
          worker_class = COW,
+         weeks_worked = WKW,
+         hours_worked = WKHP,
          industry = NAICSP,
-         hh_income = HINCP,
          wage_income = WAGP,
          region = REGION.x,
          state = ST.x) %>%
@@ -245,38 +234,121 @@ acs_sample <- acs_sample_raw %>%
            fct_recode(!!!race_levels),
          military = as.factor(military) %>%
            fct_recode(!!!military_levels),
-         disabled = as.factor(disabled) %>%
-           fct_recode(!!!disabled_levels),
+         disabled = ifelse(disabled == 1, TRUE, FALSE),
          married = as.factor(married) %>%
            fct_recode(!!!married_levels),
          children_age = as.factor(children_age) %>%
            fct_recode(!!!children_age_levels),
-         gave_birth = as.factor(gave_birth) %>%
-           fct_recode(!!!gave_birth_levels),
+         gave_birth = ifelse(gave_birth == 1, TRUE, FALSE),
          education = as.factor(education) %>%
            fct_recode(!!!education_levels),
-         stem_degree = as.factor(stem_degree) %>%
-           fct_recode(!!!stem_degree_levels),
+         stem_degree = ifelse(stem_degree == 1, TRUE, FALSE),
          employment = as.factor(employment) %>%
            fct_recode(!!!employment_levels),
          region = as.factor(region) %>%
            fct_recode(!!!region_levels),
          state = as.factor(state) %>%
-           fct_recode(!!!state_levels))
+           fct_recode(!!!state_levels)) %>%
+  
+  # filtering the individuals to keep
+  filter(!(is.na(wage_income)) & wage_income > 0, # salary income is positive
+         employment %in% c("employed working",
+                           "employed not working",
+                           "military working")) # employed and/or working
 
-# changing underscores to spaces
-acs_sample <- map_df(acs_sample, function(x) {
-                      str_replace_all(x, "_", " ")
-                    })
-
-# Remaining work to be done:
-# - convert inputs to appropriate data types (e.g. factors)
 # - merge degree variables into one (after conversion)
+
+# CHANGE DISABLED AND STEM DEGREE TO LOGICAL
+```
+
+```{r, remove, include=FALSE}
+# removing unused variables
+rm(children_age_levels, citizenship_levels, degree_levels, 
+     disabled_levels, education_levels, employment_levels,
+     gave_birth_levels, married_levels, military_levels,
+     race_levels, region_levels, sex_levels, state_levels,
+     stem_degree_levels, worker_class_levels)
+
+rm(acs_sample_raw1, acs_sample_raw2)
 ```
 
 # Data exploration
 
 <!-- Explore distributions and associations graphically and numerically. -->
+
+```{r, functions}
+# some functions for repetitive tasks
+render_table <- function(data, title = NULL) {
+  data %>%
+      kable(booktabs = TRUE, caption = title) %>%
+      kable_styling(latex_options = "striped")
+}
+```
+
+```{r univariate}
+# sex
+acs_sample %>%
+  group_by(sex) %>%
+  tally() %>%
+  render_table()
+
+ggplot(acs_sample, aes(x = sex)) + 
+  geom_bar()
+
+# race
+acs_sample %>%
+  group_by(race) %>%
+  tally() %>%
+  render_table()
+
+ggplot(acs_sample, aes(x = race)) + 
+  geom_bar()
+
+# income
+acs_sample %>%
+  favstats(~wage_income, data = .) %>%
+  render_table()
+
+ggplot(acs_sample, aes(x = wage_income, y = ..count..)) + 
+  geom_density() +
+  scale_x_log10() +
+  geom_vline(xintercept = median(acs_sample$wage_income))
+
+# age
+acs_sample %>%
+  favstats(~age, data = .) %>%
+  render_table()
+
+ggplot(acs_sample, aes(x = age, y = ..count..)) + 
+  geom_density(fill = "aquamarine3")
+
+# region
+acs_sample %>%
+  group_by(region) %>%
+  tally() %>%
+  render_table()
+
+ggplot(acs_sample, aes(x = region)) + 
+  geom_bar()
+
+# acs_sample %>%
+#   filter(wage_income != 0) %>%
+#   ggplot(aes(x = wage_income, fill = sex)) +
+#   geom_density(alpha = 0.5) + 
+#   scale_x_continuous(trans = "log2") +
+#   geom_vline(xintercept = median(acs_sample %>% filter(wage_income!=0, sex == "male") %>% .$wage_income)) +
+#   geom_vline(xintercept = median(acs_sample %>% filter(wage_income!=0, sex == "female") %>% .$wage_income))
+# 
+# # add in filtering on education, stem degrees, etc.
+# acs_sample %>%
+#   filter(hh_income != 0, wage_income != 0) %>%
+#   group_by(sex) %>%
+#   summarize(median_hh_income = median(hh_income, na.rm = TRUE),
+#             median_wage_income = median(wage_income, na.rm = TRUE)) %>%
+#   ggplot() +
+#   geom_bar(aes(x = sex, y = median_hh_income), stat = "identity", fill = "blue") +
+#   geom_bar(aes(x = sex, y = median_wage_income), stat = "identity", fill = "red")
+```
 
 # Data analysis
 
