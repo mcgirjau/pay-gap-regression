@@ -47,7 +47,7 @@ options(scipen = 1)
 
 <!-- Get the data into the format needed for analysis. Any time in other sections that you realize your data should actually look a different way (e.g, maybe you decide you really want to collapse a categorical variable or something), make sure to come back to this section to implement that change from the beginning. This will be an iterative process! -->
 
-```{r, import2}
+```{r, import}
 acs_sample_raw_small <- read_csv("data/acs230_3k.csv")
 ```
 
@@ -68,7 +68,7 @@ race_levels <- c(white = "1",
                   native = "4",
                   native = "5",
                   asian = "6",
-                  "pacific islander" = "7",
+                  native = "7",
                   other = "8",
                   multiple = "9")
 
@@ -184,6 +184,13 @@ state_levels <- c(AL = "1",
                   WY = "56",
                   "Puerto Rico" = "72")
 
+# must finish recoding industry codes and degree codes,
+# as well as other unfinished factors
+
+# must merge degree variables
+
+# expanding sample (?)
+
 ```
 
 ```{r, variables}
@@ -195,7 +202,7 @@ acs_sample <- acs_sample_raw_small %>%
   
   # selecting which variables to keep
   select(SEX, AGEP, CIT, RAC1P, MIL, DIS, # general demographics
-         MAR, HUPARC, NRC, FER, # family and household
+         MAR, PAOC, NRC, FER, # family and household
          SCHL, FOD1P, FOD2P, SCIENGP, # educational background
          ESR, COW, WKW, WKHP, NAICSP, # employment
          WAGP, # income
@@ -209,7 +216,7 @@ acs_sample <- acs_sample_raw_small %>%
          military = MIL,
          disabled = DIS,
          married = MAR,
-         children_age = HUPARC,
+         children_age = PAOC,
          children_no = NRC,
          gave_birth = FER,
          education = SCHL,
@@ -234,31 +241,29 @@ acs_sample <- acs_sample_raw_small %>%
            fct_recode(!!!race_levels),
          military = as.factor(military) %>%
            fct_recode(!!!military_levels),
-         disabled = ifelse(disabled == 1, TRUE, FALSE),
          married = as.factor(married) %>%
            fct_recode(!!!married_levels),
          children_age = as.factor(children_age) %>%
            fct_recode(!!!children_age_levels),
-         gave_birth = ifelse(gave_birth == 1, TRUE, FALSE),
          education = as.factor(education) %>%
            fct_recode(!!!education_levels),
-         stem_degree = ifelse(stem_degree == 1, TRUE, FALSE),
          employment = as.factor(employment) %>%
            fct_recode(!!!employment_levels),
          region = as.factor(region) %>%
            fct_recode(!!!region_levels),
          state = as.factor(state) %>%
-           fct_recode(!!!state_levels)) %>%
+           fct_recode(!!!state_levels),
+         gave_birth = ifelse(gave_birth == 1, TRUE, FALSE),
+         stem_degree = ifelse(stem_degree == 1, TRUE, FALSE),
+         disabled = ifelse(disabled == 1, TRUE, FALSE)) %>%
   
   # filtering the individuals to keep
   filter(!(is.na(wage_income)) & wage_income > 0, # salary income is positive
          employment %in% c("employed working",
                            "employed not working",
                            "military working")) # employed and/or working
-
-# - merge degree variables into one (after conversion)
-
-# CHANGE DISABLED AND STEM DEGREE TO LOGICAL
+  
+# must drop unused levels after filtering
 ```
 
 ```{r, remove, include=FALSE}
@@ -285,8 +290,12 @@ render_table <- function(data, title = NULL) {
 }
 ```
 
+## Univariate data exploration
+
 ```{r univariate}
-# sex
+# must make graphics nicer - colors, axis labels, titles, captions
+
+# sex --------------------------------------------------------------------
 acs_sample %>%
   group_by(sex) %>%
   tally() %>%
@@ -295,7 +304,7 @@ acs_sample %>%
 ggplot(acs_sample, aes(x = sex)) + 
   geom_bar()
 
-# race
+# race -------------------------------------------------------------------
 acs_sample %>%
   group_by(race) %>%
   tally() %>%
@@ -304,7 +313,7 @@ acs_sample %>%
 ggplot(acs_sample, aes(x = race)) + 
   geom_bar()
 
-# income
+# income -----------------------------------------------------------------
 acs_sample %>%
   favstats(~wage_income, data = .) %>%
   render_table()
@@ -314,7 +323,7 @@ ggplot(acs_sample, aes(x = wage_income, y = ..count..)) +
   scale_x_log10() +
   geom_vline(xintercept = median(acs_sample$wage_income))
 
-# age
+# age --------------------------------------------------------------------
 acs_sample %>%
   favstats(~age, data = .) %>%
   render_table()
@@ -322,7 +331,7 @@ acs_sample %>%
 ggplot(acs_sample, aes(x = age, y = ..count..)) + 
   geom_density(fill = "aquamarine3")
 
-# region
+# region -----------------------------------------------------------------
 acs_sample %>%
   group_by(region) %>%
   tally() %>%
@@ -330,6 +339,10 @@ acs_sample %>%
 
 ggplot(acs_sample, aes(x = region)) + 
   geom_bar()
+```
+
+```{r include=FALSE}
+# code I played around with 
 
 # acs_sample %>%
 #   filter(wage_income != 0) %>%
