@@ -1,15 +1,20 @@
 ---
-title: "A Regression Analysis of the Gender Pay Gap"
+title: "A Regression Analysis of the Gender Pay Gap \\ (Technical Report)"
 author: "Maria-Cristiana Gîrjău"
-date: "Revised on 2019-09-20"
+date: "Revised on 14 October 2019"
 output: 
   pdf_document:
     fig_height: 4
     fig_width: 6
-    df_print: kable
+    toc: TRUE
+    number_sections: TRUE
+fontsize: 11pt
+geometry: margin=1in
+editor_options: 
+  chunk_output_type: inline
 ---
 
-```{r, setup, include=FALSE}
+```{r setup, include=FALSE}
 # Loading necessary packages
 require(readr)
 require(mosaic)
@@ -21,38 +26,95 @@ require(purrr)
 require(kableExtra)
 require(data.table)
 
+# Tweaks to adjust code chunk font size
+chunk_hook <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- chunk_hook(x, options)
+  ifelse(options$size != "normalsize", 
+         paste0("\n \\", options$size, "\n\n", x, "\n\n \\normalsize"), x)
+})
+
 # Setting default chunk and display options
 knitr::opts_chunk$set(
-  # display code as typed
-  tidy = F,
-  # slightly smaller font for code
-  size = "small",
-  # tab plain R output
-  comment = "\t",
-  # center figures
-  fig.align = "center",
-  # suppress warnings & messages in knitted doc
-  warning = F, message = F)   
+  tidy = FALSE, # display code as typed
+  comment = "\t", # tab plain R output
+  size = "small", # smaller font for code
+  fig.align = "center", # center figures
+  warning = F, message = F) # suppress warnings & messages in knitted doc
 
-# greyscale ggplot theme
-theme_set(theme_classic())
+# B&w ggplot2 theme
+theme_set(theme_bw())
 
-# not using scientific notation
-options(scipen = 1)
+# Not using scientific notation
+options(scipen = 999)
 ```
 
-<!-- This document should include all the code used to wrangle and analze your data. You should comment your code within each code chunk, and you should document your process as you go. This means describing what each code chunk is doing if it's not immediately obvious (e.g., "After reading in the data, we noticed that this categorical variable was being treated as a numeric variable, so we forced it to be a factor instead."), every decision you made (e.g., "In the code below, we dropped every person over 90 years old and collapsed such-and-such categorical variable down to three categories instead of 10."), and what you are gathering from any output (e.g., "The histogram above shows us that the data are skewed right with one extreme outlier around 300."). Only set `echo=F` for code you do not want to receive feedback on. Use `eval=F` if there is code that is not working and that you want help with! -->
+\newpage
 
-# Data wrangling
+# Data Wrangling
 
-<!-- Get the data into the format needed for analysis. Any time in other sections that you realize your data should actually look a different way (e.g, maybe you decide you really want to collapse a categorical variable or something), make sure to come back to this section to implement that change from the beginning. This will be an iterative process! -->
+## Data Import
 
-```{r, import}
+```{r import}
+# Full dataset (already wrangled, see .R script for details)
 ACS <- readRDS("data/ACS.Rds")
+
+# Sample of 3000 to be wrangled in RMarkdown
+ACSSampleRaw <- readr::read_csv("data/acs230_3k.csv")
 ```
 
-```{r, factors, eval=FALSE}
-# setting factor levels
+## Variable Selection
+
+A number of variables have been identified as potentially relevant to the issue of the gender pay gap. Optimally, a careful consideration of each of them might provide us with a more precise understanding of the relationship between gender and income. However, only some of the variables below will make it into our final regression models - some will be used for filtering (e.g. \textbf{employment}), others are intended for creating meaningful visualizations (e.g. \textbf{state}, \textbf{industry}), and others might prove to have an insignificant effect on the relationship between gender and income.
+
+In the list below, variables have been grouped under general topics, and we have included their names as they appear in the original data set, their new names as assigned for our analysis, as well as their respective descriptions from the Data Dictionary. For each individual, we will look at:
+
+\begin{enumerate}
+    \item General demographics:
+    \begin{enumerate}
+        \item \textbf{SEX} (renamed to \textbf{sex}) - \textit{``Sex''}
+        \item \textbf{AGEP} (renamed to \textbf{age}) - \textit{``Age''}
+        \item \textbf{CIT} (renamed to \textbf{citizenship}) - \textit{``Citizenship Status''}
+        \item \textbf{RAC1P} (renamed to \textbf{race}) - \textit{``Recoded detailed race code''}
+        \item \textbf{MIL} (renamed to \textbf{military}) - \textit{``Military service''}
+        \item \textbf{DIS} (renamed to \textbf{disabled}) - \textit{``Disability recode''}
+    \end{enumerate}
+    \item Family and household:
+    \begin{enumerate}
+        \item \textbf{MAR} (renamed to \textbf{married})- \textit{``Marital status''}
+        \item \textbf{HUPARC} (renamed to \textbf{children\_age}) - \textit{``Household presence and age of related children''}
+        \item \textbf{NRC} (renamed to \textbf{children\_no}) - \textit{``Number of related children in household (unweighted)''}
+        \item \textbf{FER} - (renamed to \textbf{gave\_birth}) \textit{``Gave birth to child within the past 12 months''}
+    \end{enumerate}
+        \item Educational background:
+    \begin{enumerate}
+        \item \textbf{SCHL} (renamed to \textbf{education}) - \textit{``Educational attainment''}
+        \item \textbf{FOD1P} (will be merged with \textbf{FOD2P} to create \textbf{degree}) - \textit{``Recoded field of degree - first entry''}
+        \item \textbf{FOD2P} (will be merged with \textbf{FOD1P} to create \textbf{degree}) - \textit{``Recoded field of degree - second entry''} \footnote{e.g. for double majors or dual degrees}
+        \item \textbf{SCIENGP} - (renamed to \textbf{stem\_degree}) \textit{``Field of Degree Science and Engineering Flag - NSF Definition''}
+    \end{enumerate}
+    \item Employment:
+    \begin{enumerate}
+        \item \textbf{ESR} (renamed to \textbf{employment}) - \textit{``Employment status recode''}
+        \item \textbf{COW} (renamed to \textbf{worker\_class}) - \textit{``Class of worker''}
+        \item \textbf{WKHP} (renamed to \textbf{hours\_worked}) - \textit{``Usual hours worked per week past 12 months'}
+        \item \textbf{WKW} (renamed to \textbf{weeks\_worked}) - \textit{``Weeks worked during past 12 months''}
+        \item \textbf{NAICSP} (renamed to \textbf{industry}) - \textit{``NAICS Industry recode for 2013 and later based on 2012 NAICS codes''}
+    \end{enumerate}
+    \item Income:
+    \begin{enumerate}
+        \item \textbf{WAGP} (renamed to \textbf{wage\_income}) - \textit{``Wages or salary income past 12 months (use ADJINC to adjust WAGP to constant dollars)''}
+        \item \textbf{ADJINC} (not renamed, will be used during data wrangling to adjust dollar amounts, then discarded) - \textit{``Adjustment factor for income and earnings dollar amounts''}
+    \end{enumerate}
+    \item Location:
+    \begin{enumerate}
+        \item \textbf{REGION} (renamed to \textbf{region}) - \textit{``Region code based on 2010 Census definitions''}
+        \item \textbf{ST} (renamed to \textbf{state}) - `\textit{`State Code based on 2010 Census definitions'}
+    \end{enumerate}
+\end{enumerate}
+
+```{r factors}
+# Setting factor levels
 sex_levels <- c(M = "1",
                 "F" = "2")
 
@@ -255,26 +317,24 @@ industry_levels <- c("Agriculture, Forestry, Fishing and Hunting" = "11",
                      "Accommodation and Food Services" = "72",
                      "Other Services (except Public Administration)" = "81",
                      "Public Administration" = "92")
-
-# expanding sample (?)
 ```
 
-```{r, variables, eval=FALSE}
+```{r variables}
 # Wrangling the data
 ACSSample <- ACSSampleRaw %>%
   
   mutate(ADJINC.x = ADJINC.x / 10^6, # adding decimal point to ADJINC
          WAGP = WAGP * ADJINC.x) %>% # adjusting dollar amounts for inflation
   
-  # selecting which variables to keep
+  # Selecting which variables to keep
   select(SEX, AGEP, CIT, RAC1P, MIL, DIS, # general demographics
-         MAR, PAOC, NRC, FER, # family and household
+         MAR, HUPARC, NRC, FER, # family and household
          SCHL, FOD1P, FOD2P, SCIENGP, # educational background
          ESR, COW, WKW, WKHP, NAICSP, # employment
          WAGP, # income
          REGION.x, ST.x) %>% # location
   
-  # renaming the variables
+  # Renaming the variables
   rename(sex = SEX,
          age = AGEP,
          citizenship = CIT,
@@ -282,7 +342,7 @@ ACSSample <- ACSSampleRaw %>%
          military = MIL,
          disabled = DIS,
          married = MAR,
-         children_age = PAOC,
+         children_age = HUPARC,
          children_no = NRC,
          gave_birth = FER,
          education = SCHL,
@@ -298,75 +358,86 @@ ACSSample <- ACSSampleRaw %>%
          region = REGION.x,
          state = ST.x) %>%
   
-  # converting inputs to an appropriate data type
+  # Converting inputs to an appropriate data type
   mutate(sex = as.factor(sex) %>%
            fct_recode(!!!sex_levels),
+         
          citizenship = as.factor(citizenship) %>%
            fct_recode(!!!citizenship_levels),
+         
          race = as.factor(race) %>%
            fct_recode(!!!race_levels),
+         
          military = as.factor(military) %>%
            fct_recode(!!!military_levels),
+         
          married = as.factor(married) %>%
            fct_recode(!!!married_levels),
+         
          children_age = as.factor(children_age) %>%
            fct_recode(!!!children_age_levels),
+         
          education = as.factor(education) %>%
            fct_recode(!!!education_levels),
+         
          employment = as.factor(employment) %>%
            fct_recode(!!!employment_levels),
+         
          region = as.factor(region) %>%
            fct_recode(!!!region_levels),
+         
          state = as.factor(state) %>%
            fct_recode(!!!state_levels),
+         
          gave_birth = ifelse(gave_birth == 1, TRUE, FALSE),
+         
          stem_degree = ifelse(stem_degree == 1, TRUE, FALSE),
+         
          disabled = ifelse(disabled == 1, TRUE, FALSE),
-         # collapsing industry codes into broad NAICS sectors
-         # (only taking the first two digits of the NAICS code,
-         # which represent the broader industry sectors)
+         
+         # Collapsing industry codes into broad NAICS sectors (only taking the first 
+         # two digits of the NAICS code, which represent the broader industry sectors)
          industry = substr(industry, start = 1, stop = 2) %>%
            as.factor() %>%
            fct_recode(!!!industry_levels),
-         # collapsing education codes into broader fields
-         # (only taking the first two digits of each code,
-         # which represent the broader field)
+         
+         # Collapsing education codes into broader fields (only taking the first 
+         # two digits of each code, which represent the broader field)
          degree_1 = substr(degree_1, start = 1, stop = 2) %>%
            as.factor() %>%
            fct_recode(!!!degree_levels),
          degree_2 = substr(degree_2, start = 1, stop = 2) %>%
            as.factor() %>%
            fct_recode(!!!degree_levels),
-         # merging the two degree variables
-         # taking care of NAs and repeated values
+         # Merging the two degree variables, taking care of NAs and repeated values
          degree = ifelse(is.na(degree_1) | is.na(degree_2),
                          as.character(degree_1),
                          ifelse(as.character(degree_1) == as.character(degree_2),
                                 as.character(degree_1),
                                 paste(degree_1, degree_2, sep = " and ")))) %>%
   
-  # filtering the individuals to keep
+  # Filtering the individuals to keep
   filter(!(is.na(wage_income)) & wage_income > 0, # salary income is positive
          employment %in% c("employed working",
                            "employed not working",
                            "military working"), # employed and/or working
          age >= 18) %>% # only people over 18
   
-  # removing merged variables and those used for filtering
-  select(-employment)  %>%
+  # Removing merged variables and those used for filtering
+  select(-employment, -degree_1, -degree_2)  %>%
   
-  # dropping unused factor levels
+  # Dropping unused factor levels
   mutate_if(is.factor, fct_drop)
 
 ```
 
 ```{r, remove, include=FALSE}
-# removing unused variables
+# Removing unused variables
 rm(children_age_levels, citizenship_levels, degree_levels, 
      disabled_levels, education_levels, employment_levels,
      gave_birth_levels, married_levels, military_levels,
      race_levels, region_levels, sex_levels, state_levels,
-     stem_degree_levels, worker_class_levels)
+     stem_degree_levels, worker_class_levels, industry_levels)
 
 rm(ACSSampleRaw)
 ```
@@ -375,8 +446,8 @@ rm(ACSSampleRaw)
 
 <!-- Explore distributions and associations graphically and numerically. -->
 
-```{r, functions}
-# some functions for repetitive tasks
+```{r functions}
+# Some functions for repetitive tasks
 render_table <- function(data, title = NULL) {
   data %>%
       kable(booktabs = TRUE, caption = title) %>%
@@ -387,18 +458,18 @@ render_table <- function(data, title = NULL) {
 ## Univariate data exploration
 
 ```{r univariate}
-# must make graphics nicer - colors, axis labels, titles, captions
+# Must make graphics nicer - colors, axis labels, titles, captions
 
-# sex --------------------------------------------------------------------
-ACS %>%
+# sex -------------------------------------------------------------------------
+ACSSample %>%
   group_by(sex) %>%
   tally() %>%
   render_table()
 
-ggplot(ACS, aes(x = sex)) + 
+ggplot(ACSSample, aes(x = sex)) + 
   geom_bar()
 
-# race -------------------------------------------------------------------
+# race ------------------------------------------------------------------------
 ACSSample %>%
   group_by(race) %>%
   tally() %>%
@@ -407,25 +478,25 @@ ACSSample %>%
 ggplot(ACSSample, aes(x = race)) + 
   geom_bar()
 
-# income -----------------------------------------------------------------
+# income ----------------------------------------------------------------------
 ACSSample %>%
   favstats(~wage_income, data = .) %>%
   render_table()
 
-ggplot(ACS, aes(x = wage_income, y = ..count..)) + 
+ggplot(ACSSample, aes(x = wage_income, y = ..count..)) + 
   geom_density(adjust = 2.5) +
   scale_x_log10() +
   geom_vline(xintercept = median(ACS$wage_income))
 
-# age --------------------------------------------------------------------
+# age -------------------------------------------------------------------------
 ACSSample %>%
   favstats(~age, data = .) %>%
   render_table()
 
-ggplot(ACS, aes(x = age, y = ..count..)) + 
+ggplot(ACSSample, aes(x = age, y = ..count..)) + 
   geom_density(fill = "aquamarine3", adjust = 2)
 
-# region -----------------------------------------------------------------
+# region ----------------------------------------------------------------------
 ACSSample %>%
   group_by(region) %>%
   tally() %>%
@@ -433,39 +504,20 @@ ACSSample %>%
 
 ggplot(ACSSample, aes(x = region)) + 
   geom_bar()
-```
 
-```{r include=FALSE}
-# code I played around with 
+# marital status --------------------------------------------------------------
+ACSSample %>%
+  group_by(married) %>%
+  tally() %>%
+  render_table()
 
-# ACSSample %>%
-#   filter(wage_income != 0) %>%
-#   ggplot(aes(x = wage_income, fill = sex)) +
-#   geom_density(alpha = 0.5) + 
-#   scale_x_continuous(trans = "log2") +
-#   geom_vline(xintercept = median(ACSSample %>% filter(wage_income!=0, sex == "male") %>% .$wage_income)) +
-#   geom_vline(xintercept = median(ACSSample %>% filter(wage_income!=0, sex == "female") %>% .$wage_income))
-# 
-# # add in filtering on education, stem degrees, etc.
-# ACSSample %>%
-#   filter(hh_income != 0, wage_income != 0) %>%
-#   group_by(sex) %>%
-#   summarize(median_hh_income = median(hh_income, na.rm = TRUE),
-#             median_wage_income = median(wage_income, na.rm = TRUE)) %>%
-#   ggplot() +
-#   geom_bar(aes(x = sex, y = median_hh_income), stat = "identity", fill = "blue") +
-#   geom_bar(aes(x = sex, y = median_wage_income), stat = "identity", fill = "red")
+ggplot(ACSSample, aes(x = married)) + 
+  geom_bar()
 ```
 
 # Data analysis
 
-<!-- Perform analyses. -->
+
 
 # Assessment
 
-
-\newpage
-
-# Current questions
-
-<!-- If you are running into issues or have wrangling problems outside of your skillset, let me know here how I can help! You can also ask for pointers on how to implement a method that maybe we haven't covered in course but you would like to include. -->

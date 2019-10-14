@@ -1,6 +1,13 @@
-# IMPORTING AND WRANGLING THE DATA
+# ----------------------------------------------------------------------------
+#
+# IMPORTING AND WRANGLING THE FULL DATASET
 # 2017 1-YEAR ACS PUMS DATA
 # RETRIEVED FROM https://www.census.gov/programs-surveys/acs/data/pums.html
+#
+# NOTE: Only run this script in an empty environment, since it will clear
+# everything once done
+#
+# ----------------------------------------------------------------------------
 
 # Loading required packages
 library(data.table)
@@ -29,13 +36,13 @@ ACSPerson <- ACSPersonRaw %>%
   
 # Selecting the variables of interest from the housing records
 ACSHousing <- ACSHousingRaw %>%
-  select(HUPAOC, NRC, # family and household
+  select(HUPARC, NRC, # family and household
          SERIALNO) # merging key
 
 # Merging the datasets by SERIALNO
 ACSRaw <- merge(ACSPerson, ACSHousing, by = "SERIALNO")
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 # Setting factor levels
 sex_levels <- c(M = "1",
@@ -248,7 +255,7 @@ ACS <- ACSRaw %>%
   
   # Adjusting income
   mutate(ADJINC = ADJINC / 10^6, # adding decimal point to ADJINC
-         WAGP = WAGP) %>% # adjusting dollar amounts for inflation
+         WAGP = WAGP * ADJINC) %>% # adjusting dollar amounts for inflation
   
   # Renaming the variables
   rename(sex = SEX,
@@ -258,7 +265,7 @@ ACS <- ACSRaw %>%
          military = MIL,
          disabled = DIS,
          married = MAR,
-         children_age = HUPAOC,
+         children_age = HUPARC,
          children_no = NRC,
          gave_birth = FER,
          education = SCHL,
@@ -311,20 +318,21 @@ ACS <- ACSRaw %>%
          
          disabled = ifelse(disabled == 1, TRUE, FALSE),
          
+         # Collapsing industry codes into broad NAICS sectors (only taking the first 
+         # two digits of the NAICS code, which represent the broader industry sectors)
          industry = substr(industry, start = 1, stop = 2) %>%
            as.factor() %>%
            fct_recode(!!!industry_levels),
          
+         # Collapsing education codes into broader fields (only taking the first 
+         # two digits of each code, which represent the broader field)
          degree_1 = substr(degree_1, start = 1, stop = 2) %>%
            as.factor() %>%
            fct_recode(!!!degree_levels),
-         
          degree_2 = substr(degree_2, start = 1, stop = 2) %>%
            as.factor() %>%
            fct_recode(!!!degree_levels),
-         
-         # Merging the two degree variables,
-         # taking care of NAs and repeated values
+         # Merging the two degree variables, taking care of NAs and repeated values
          degree = ifelse(is.na(degree_1) | is.na(degree_2),
                          as.character(degree_1),
                          ifelse(as.character(degree_1) == as.character(degree_2),
@@ -338,13 +346,13 @@ ACS <- ACSRaw %>%
                            "military working"), # employed and/or working
          age >= 18) %>% # only people over 18
   
-  # Removing merged variables and those used for filtering
-  select(-SERIALNO, -employment, -degree_1, -degree_2)  %>%
+  # Removing merged variables and those used for filtering or joining
+  select(-SERIALNO, -ADJINC, -employment, -degree_1, -degree_2)  %>%
   
   # Dropping unused factor levels
   mutate_if(is.factor, fct_drop)
 
-#-------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 # Saving the dataset
 saveRDS(ACS, file = "data/ACS.Rds")
