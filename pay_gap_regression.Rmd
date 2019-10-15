@@ -55,63 +55,19 @@ options(scipen = 999)
 
 ## Data Import
 
-```{r import}
-# Full dataset (already wrangled, see .R script for details)
-ACS <- readRDS("data/ACS.Rds")
+Importing both the provided sample and the full original PUMS dataset (merged, pre-wrangled, and filtered appropriately in an .R script). The provided sample will be used for analysis, while the full dataset might come in handy for certain visualizations such as maps, which require more data to be meaningful.
 
+```{r import}
 # Sample of 3000 to be wrangled in RMarkdown
 ACSSampleRaw <- readr::read_csv("data/acs230_3k.csv")
+
+# Full dataset (already wrangled, see .R script for details)
+ACS <- readRDS("data/ACS.Rds")
 ```
 
-## Variable Selection
+## Preparation
 
-A number of variables have been identified as potentially relevant to the issue of the gender pay gap. Optimally, a careful consideration of each of them might provide us with a more precise understanding of the relationship between gender and income. However, only some of the variables below will make it into our final regression models - some will be used for filtering (e.g. \textbf{employment}), others are intended for creating meaningful visualizations (e.g. \textbf{state}, \textbf{industry}), and others might prove to have an insignificant effect on the relationship between gender and income.
-
-In the list below, variables have been grouped under general topics, and we have included their names as they appear in the original data set, their new names as assigned for our analysis, as well as their respective descriptions from the Data Dictionary. For each individual, we will look at:
-
-\begin{enumerate}
-    \item General demographics:
-    \begin{enumerate}
-        \item \textbf{SEX} (renamed to \textbf{sex}) - \textit{``Sex''}
-        \item \textbf{AGEP} (renamed to \textbf{age}) - \textit{``Age''}
-        \item \textbf{CIT} (renamed to \textbf{citizenship}) - \textit{``Citizenship Status''}
-        \item \textbf{RAC1P} (renamed to \textbf{race}) - \textit{``Recoded detailed race code''}
-        \item \textbf{MIL} (renamed to \textbf{military}) - \textit{``Military service''}
-        \item \textbf{DIS} (renamed to \textbf{disabled}) - \textit{``Disability recode''}
-    \end{enumerate}
-    \item Family and household:
-    \begin{enumerate}
-        \item \textbf{MAR} (renamed to \textbf{married})- \textit{``Marital status''}
-        \item \textbf{HUPARC} (renamed to \textbf{children\_age}) - \textit{``Household presence and age of related children''}
-        \item \textbf{NRC} (renamed to \textbf{children\_no}) - \textit{``Number of related children in household (unweighted)''}
-        \item \textbf{FER} - (renamed to \textbf{gave\_birth}) \textit{``Gave birth to child within the past 12 months''}
-    \end{enumerate}
-        \item Educational background:
-    \begin{enumerate}
-        \item \textbf{SCHL} (renamed to \textbf{education}) - \textit{``Educational attainment''}
-        \item \textbf{FOD1P} (will be merged with \textbf{FOD2P} to create \textbf{degree}) - \textit{``Recoded field of degree - first entry''}
-        \item \textbf{FOD2P} (will be merged with \textbf{FOD1P} to create \textbf{degree}) - \textit{``Recoded field of degree - second entry''} \footnote{e.g. for double majors or dual degrees}
-        \item \textbf{SCIENGP} - (renamed to \textbf{stem\_degree}) \textit{``Field of Degree Science and Engineering Flag - NSF Definition''}
-    \end{enumerate}
-    \item Employment:
-    \begin{enumerate}
-        \item \textbf{ESR} (renamed to \textbf{employment}) - \textit{``Employment status recode''}
-        \item \textbf{COW} (renamed to \textbf{worker\_class}) - \textit{``Class of worker''}
-        \item \textbf{WKHP} (renamed to \textbf{hours\_worked}) - \textit{``Usual hours worked per week past 12 months'}
-        \item \textbf{WKW} (renamed to \textbf{weeks\_worked}) - \textit{``Weeks worked during past 12 months''}
-        \item \textbf{NAICSP} (renamed to \textbf{industry}) - \textit{``NAICS Industry recode for 2013 and later based on 2012 NAICS codes''}
-    \end{enumerate}
-    \item Income:
-    \begin{enumerate}
-        \item \textbf{WAGP} (renamed to \textbf{wage\_income}) - \textit{``Wages or salary income past 12 months (use ADJINC to adjust WAGP to constant dollars)''}
-        \item \textbf{ADJINC} (not renamed, will be used during data wrangling to adjust dollar amounts, then discarded) - \textit{``Adjustment factor for income and earnings dollar amounts''}
-    \end{enumerate}
-    \item Location:
-    \begin{enumerate}
-        \item \textbf{REGION} (renamed to \textbf{region}) - \textit{``Region code based on 2010 Census definitions''}
-        \item \textbf{ST} (renamed to \textbf{state}) - `\textit{`State Code based on 2010 Census definitions'}
-    \end{enumerate}
-\end{enumerate}
+Preparing the levels for the factor variables we intend to recode.
 
 ```{r factors}
 # Setting factor levels
@@ -133,7 +89,6 @@ race_levels <- c(white = "1",
                   native = "7",
                   other = "8",
                   multiple = "9")
-
 
 military_levels <- c(active = "1",
                      past = "2",
@@ -213,7 +168,6 @@ degree_levels <- c("Agriculture" = "11",
                    "Medicine" = "61",
                    "Business and Finance" = "62",
                    "History" = "64")
-
 
 employment_levels <- c("employed working" = "1",
                        "employed not working" = "2",
@@ -318,6 +272,10 @@ industry_levels <- c("Agriculture, Forestry, Fishing and Hunting" = "11",
                      "Other Services (except Public Administration)" = "81",
                      "Public Administration" = "92")
 ```
+
+## Variable Selection
+
+Selecting the variables of interest (see the Data Dictionary in the Appendices for details), renaming and mutating them appropriately, and filtering based on specific criteria.
 
 ```{r variables}
 # Wrangling the data
@@ -444,32 +402,32 @@ rm(ACSSampleRaw)
 
 # Data exploration
 
-<!-- Explore distributions and associations graphically and numerically. -->
+Exploring distributions and associations graphically and numerically.
 
 ```{r functions}
 # Some functions for repetitive tasks
 render_table <- function(data, title = NULL) {
   data %>%
-      kable(booktabs = TRUE, caption = title) %>%
-      kable_styling(latex_options = "striped")
+    kable(booktabs = TRUE, caption = title) %>%
+    kable_styling(latex_options = c("striped", "HOLD_position"))
 }
 ```
 
-## Univariate data exploration
+## Univariate Data Exploration
 
 ```{r univariate}
 # Must make graphics nicer - colors, axis labels, titles, captions
 
-# sex -------------------------------------------------------------------------
+# sex
 ACSSample %>%
   group_by(sex) %>%
   tally() %>%
-  render_table()
+  render_table("Distribution of ")
 
 ggplot(ACSSample, aes(x = sex)) + 
   geom_bar()
 
-# race ------------------------------------------------------------------------
+# race
 ACSSample %>%
   group_by(race) %>%
   tally() %>%
@@ -478,7 +436,7 @@ ACSSample %>%
 ggplot(ACSSample, aes(x = race)) + 
   geom_bar()
 
-# income ----------------------------------------------------------------------
+# income
 ACSSample %>%
   favstats(~wage_income, data = .) %>%
   render_table()
@@ -488,7 +446,7 @@ ggplot(ACSSample, aes(x = wage_income, y = ..count..)) +
   scale_x_log10() +
   geom_vline(xintercept = median(ACS$wage_income))
 
-# age -------------------------------------------------------------------------
+# age
 ACSSample %>%
   favstats(~age, data = .) %>%
   render_table()
@@ -496,7 +454,7 @@ ACSSample %>%
 ggplot(ACSSample, aes(x = age, y = ..count..)) + 
   geom_density(fill = "aquamarine3", adjust = 2)
 
-# region ----------------------------------------------------------------------
+# region 
 ACSSample %>%
   group_by(region) %>%
   tally() %>%
@@ -505,7 +463,7 @@ ACSSample %>%
 ggplot(ACSSample, aes(x = region)) + 
   geom_bar()
 
-# marital status --------------------------------------------------------------
+# marital status
 ACSSample %>%
   group_by(married) %>%
   tally() %>%
@@ -515,9 +473,62 @@ ggplot(ACSSample, aes(x = married)) +
   geom_bar()
 ```
 
-# Data analysis
+## Multivariate Data Exploration
+
+# Data Analysis
 
 
 
 # Assessment
 
+# Appendices
+
+## Data Dictionary
+
+A number of variables have been identified as potentially relevant to the issue of the gender pay gap. Optimally, a careful consideration of each of them might provide us with a more precise understanding of the relationship between gender and income. However, only some of the variables below will make it into our final regression models - some will be used for filtering (e.g. \textbf{employment}), others are intended for creating meaningful visualizations (e.g. \textbf{state}, \textbf{industry}), and others might prove to have an insignificant effect on the relationship between gender and income.
+
+In the list below, variables have been grouped under general topics, and we have included their names as they appear in the original data set, their new names as assigned for our analysis, as well as their respective descriptions from the Data Dictionary. For each individual, we will look at:
+
+\begin{enumerate}
+    \item General demographics:
+    \begin{enumerate}
+        \item \textbf{SEX} (renamed to \textbf{sex}) - \textit{``Sex''}
+        \item \textbf{AGEP} (renamed to \textbf{age}) - \textit{``Age''}
+        \item \textbf{CIT} (renamed to \textbf{citizenship}) - \textit{``Citizenship Status''}
+        \item \textbf{RAC1P} (renamed to \textbf{race}) - \textit{``Recoded detailed race code''}
+        \item \textbf{MIL} (renamed to \textbf{military}) - \textit{``Military service''}
+        \item \textbf{DIS} (renamed to \textbf{disabled}) - \textit{``Disability recode''}
+    \end{enumerate}
+    \item Family and household:
+    \begin{enumerate}
+        \item \textbf{MAR} (renamed to \textbf{married})- \textit{``Marital status''}
+        \item \textbf{HUPARC} (renamed to \textbf{children\_age}) - \textit{``Household presence and age of related children''}
+        \item \textbf{NRC} (renamed to \textbf{children\_no}) - \textit{``Number of related children in household (unweighted)''}
+        \item \textbf{FER} - (renamed to \textbf{gave\_birth}) \textit{``Gave birth to child within the past 12 months''}
+    \end{enumerate}
+        \item Educational background:
+    \begin{enumerate}
+        \item \textbf{SCHL} (renamed to \textbf{education}) - \textit{``Educational attainment''}
+        \item \textbf{FOD1P} (will be merged with \textbf{FOD2P} to create \textbf{degree}) - \textit{``Recoded field of degree - first entry''}
+        \item \textbf{FOD2P} (will be merged with \textbf{FOD1P} to create \textbf{degree}) - \textit{``Recoded field of degree - second entry''} \footnote{e.g. for double majors or dual degrees}
+        \item \textbf{SCIENGP} - (renamed to \textbf{stem\_degree}) \textit{``Field of Degree Science and Engineering Flag - NSF Definition''}
+    \end{enumerate}
+    \item Employment:
+    \begin{enumerate}
+        \item \textbf{ESR} (renamed to \textbf{employment}) - \textit{``Employment status recode''}
+        \item \textbf{COW} (renamed to \textbf{worker\_class}) - \textit{``Class of worker''}
+        \item \textbf{WKHP} (renamed to \textbf{hours\_worked}) - \textit{``Usual hours worked per week past 12 months'}
+        \item \textbf{WKW} (renamed to \textbf{weeks\_worked}) - \textit{``Weeks worked during past 12 months''}
+        \item \textbf{NAICSP} (renamed to \textbf{industry}) - \textit{``NAICS Industry recode for 2013 and later based on 2012 NAICS codes''}
+    \end{enumerate}
+    \item Income:
+    \begin{enumerate}
+        \item \textbf{WAGP} (renamed to \textbf{wage\_income}) - \textit{``Wages or salary income past 12 months (use ADJINC to adjust WAGP to constant dollars)''}
+        \item \textbf{ADJINC} (not renamed, will be used during data wrangling to adjust dollar amounts, then discarded) - \textit{``Adjustment factor for income and earnings dollar amounts''}
+    \end{enumerate}
+    \item Location:
+    \begin{enumerate}
+        \item \textbf{REGION} (renamed to \textbf{region}) - \textit{``Region code based on 2010 Census definitions''}
+        \item \textbf{ST} (renamed to \textbf{state}) - `\textit{`State Code based on 2010 Census definitions'}
+    \end{enumerate}
+\end{enumerate}
