@@ -39,3 +39,6 @@ rsconnect/
 
 # TeX files
 **/*.log
+
+# .DS_Store
+**/*.DS_Store

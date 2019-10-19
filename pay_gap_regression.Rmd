@@ -532,3 +532,40 @@ In the list below, variables have been grouped under general topics, and we have
         \item \textbf{ST} (renamed to \textbf{state}) - `\textit{`State Code based on 2010 Census definitions'}
     \end{enumerate}
 \end{enumerate}
+
+```{r}
+
+# How many clusters would we need? Let's make an elbow plot...
+tot_withinss <- map_dbl(1:10,  function(k) {
+  model <- kmeans(ACS %>% select(wage_income, age, children_no) %>% na.omit(), centers = k)
+  model$tot.withinss
+})
+
+elbow_df <- data.frame(
+  k = 1:10,
+  tot_withinss = tot_withinss
+)
+
+ggplot(elbow_df, aes(x = k, y = tot_withinss)) +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10)
+
+clusters <- ACS %>%
+  select(wage_income, age, children_no) %>%
+  na.omit() %>%
+  kmeans(centers = 3) %>%
+  fitted("classes") %>%
+  as.factor()
+
+ACS2 <- ACS %>%
+  select(wage_income, age, children_no, sex) %>%
+  na.omit() %>%
+  mutate(cluster = clusters)
+
+ggpairs(ACS2 %>% select(wage_income, sex, cluster), mapping = aes(color = cluster))
+
+ggplot(ACS2, aes(x = sex, fill = cluster)) +
+  geom_bar()
+
+prop.table(table(ACS2$sex, ACS2$cluster), margin = 2) * 100
+```
