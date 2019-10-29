@@ -15,13 +15,13 @@ library(dplyr)
 library(forcats)
 
 # Reading in the population records
-ACSPersonRaw1 <- fread("data/csv_pus/psam_pusa.csv")
-ACSPersonRaw2 <- fread("data/csv_pus/psam_pusb.csv")
+ACSPersonRaw1 <- fread("data/raw/csv_pus/psam_pusa.csv")
+ACSPersonRaw2 <- fread("data/raw/csv_pus/psam_pusb.csv")
 ACSPersonRaw <- rbindlist(list(ACSPersonRaw1, ACSPersonRaw2))
 
 # Reading in the population records
-ACSHousingRaw1 <- fread("data/csv_hus/psam_husa.csv")
-ACSHousingRaw2 <- fread("data/csv_hus/psam_husb.csv")
+ACSHousingRaw1 <- fread("data/raw/csv_hus/psam_husa.csv")
+ACSHousingRaw2 <- fread("data/raw/csv_hus/psam_husb.csv")
 ACSHousingRaw <- rbindlist(list(ACSHousingRaw1, ACSHousingRaw2))
 
 # Selecting the variables of interest from the population records
