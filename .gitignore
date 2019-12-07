@@ -2,10 +2,10 @@
 .Rhistory
 .Rapp.history
 
-# Session Data files and data folder
+# Session Data files and raw data folder
 .RData
 .Ruserdata
-data/
+data/raw/*
 
 # Example code in package build process
 *-Ex.R
