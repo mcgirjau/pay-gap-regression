@@ -27,16 +27,16 @@ ACSHousingRaw <- rbindlist(list(ACSHousingRaw1, ACSHousingRaw2))
 # Selecting the variables of interest from the population records
 ACSPerson <- ACSPersonRaw %>%
   select(SEX, AGEP, CIT, RAC1P, MIL, DIS, # general demographics
-         MAR, FER, # family and household
+         MAR, # family and household
          SCHL, FOD1P, FOD2P, SCIENGP, # educational background
-         ESR, COW, WKW, WKHP, NAICSP, # employment
+         ESR, WKHP, NAICSP, # employment
          WAGP, ADJINC, # income
          REGION, ST, # location
          SERIALNO) # merging key
-  
+
 # Selecting the variables of interest from the housing records
 ACSHousing <- ACSHousingRaw %>%
-  select(HUPARC, NRC, # family and household
+  select(NP, NRC, # family and household
          SERIALNO) # merging key
 
 # Merging the datasets by SERIALNO
@@ -48,66 +48,25 @@ ACSRaw <- merge(ACSPerson, ACSHousing, by = "SERIALNO")
 sex_levels <- c(M = "1",
                 "F" = "2")
 
-citizenship_levels <- c("US born" = "1",
-                        "territories born" = "2",
-                        "aborad born" = "3",
-                        naturalized = "4",
-                        "not a citizen" = "5")
+# will only be used for tallying
+race_levels <- c(White = "1",
+                 Black = "2",
+                 Native = "3",
+                 Native = "4",
+                 Native = "5",
+                 Asian = "6",
+                 Native = "7",
+                 Other = "8",
+                 Multiple = "9")
 
-race_levels <- c(white = "1",
-                 black = "2",
-                 native = "3",
-                 native = "4",
-                 native = "5",
-                 asian = "6",
-                 native = "7",
-                 other = "8",
-                 multiple = "9")
+# will only be used for tallying
+marital_status_levels <- c(Married = "1",
+                           Widowed = "2",
+                           Divorced = "3",
+                           Separated = "4",
+                           Single = "5")
 
-
-military_levels <- c(active = "1",
-                     past = "2",
-                     training = "3",
-                     never = "4")
-
-married_levels <- c(married = "1",
-                    widowed = "2",
-                    divorced = "3",
-                    separated = "4",
-                    single = "5")
-
-children_age_levels <- c("under six" = "1",
-                         "above six" = "2",
-                         both = "3",
-                         none = "4")
-
-education_levels <- c(none = "1",
-                      preschool = "2",
-                      kindergarten = "3",
-                      "grade school" = "4",
-                      "grade school" = "5",
-                      "grade school" = "6",
-                      "grade school" = "7",
-                      "grade school" = "8",
-                      "grade school" = "9",
-                      "grade school" = "10",
-                      "grade school" = "11",
-                      "some high school" = "12",
-                      "some high school" = "13",
-                      "some high school" = "14",
-                      "some high school" = "15",
-                      "high school diploma" = "16",
-                      "high school diploma" = "17",
-                      "less than one year of college" = "18",
-                      "more than one year of college" = "19",
-                      "associate degree" = "20",
-                      "bachelor's degree" = "21",
-                      "master's degree" = "22",
-                      "professional degree" = "23",
-                      "doctoral degree" = "24")
-
-# Collapsing education codes into broad fields (only taking the first two 
-# digits of each code, which represent the broader field)
+# collapsing degree
 degree_levels <- c("Agriculture" = "11",
                    "Environmental" = "13",
                    "Architecture" = "14",
@@ -146,23 +105,13 @@ degree_levels <- c("Agriculture" = "11",
                    "Business and Finance" = "62",
                    "History" = "64")
 
-
-employment_levels <- c("employed working" = "1",
-                       "employed not working" = "2",
-                       unemployed = "3",
-                       "military working" = "4",
-                       "military not working" = "5",
-                       "not in labor force" = "6")
-
-worker_class_levels <- c("Private for-profit" = 1,
-                         "Private not-for-profit" = 2,
-                         "Local government" = 3,
-                         "State government" = 4,
-                         "Federal government" = 5,
-                         "Self-employed" = 6,
-                         "Self-employed" = 7,
-                         "Family business" = 8,
-                         "Never worked" = 9)
+# will be used for filtering
+employment_levels <- c("Employed working" = "1",
+                       "Employed not working" = "2",
+                       Unemployed = "3",
+                       "Military working" = "4",
+                       "Military not working" = "5",
+                       "Not in labor force" = "6")
 
 region_levels <- c(Northeast = "1",
                    Midwest = "2",
@@ -221,8 +170,7 @@ state_levels <- c(AL = "1",
                   WI = "55",
                   WY = "56")
 
-# Collapsing industry codes into broad NAICS sectors (only taking the first two 
-# digits of the NAICS code, which represent the broader industry sectors)
+# collapsing industry
 industry_levels <- c("Agriculture, Forestry, Fishing and Hunting" = "11",
                      "Mining, Quarrying, and Oil and Gas Extraction" = "21",
                      "Utilities" = "22",
@@ -255,7 +203,8 @@ ACS <- ACSRaw %>%
   
   # Adjusting income
   mutate(ADJINC = ADJINC / 10^6, # adding decimal point to ADJINC
-         WAGP = WAGP * ADJINC) %>% # adjusting dollar amounts for inflation
+         WAGP = WAGP * ADJINC, # adjusting dollar amounts for inflation
+         WAGP = round(WAGP)) %>% # rounding to nearest dollar
   
   # Renaming the variables
   rename(sex = SEX,
@@ -264,18 +213,15 @@ ACS <- ACSRaw %>%
          race = RAC1P,
          military = MIL,
          disabled = DIS,
-         married = MAR,
-         children_age = HUPARC,
-         children_no = NRC,
-         gave_birth = FER,
+         people_in_household = NP,
+         marital_status = MAR,
+         children = NRC,
          education = SCHL,
          degree_1 = FOD1P,
          degree_2 = FOD2P,
          stem_degree = SCIENGP,
          employment = ESR,
-         worker_class = COW,
-         weeks_worked = WKW,
-         hours_worked = WKHP,
+         hours_per_week = WKHP,
          industry = NAICSP,
          wage_income = WAGP,
          region = REGION,
@@ -283,41 +229,53 @@ ACS <- ACSRaw %>%
   
   # Converting entries to the appropriate data types
   mutate(sex = as.factor(sex) %>%
-           fct_recode(!!!sex_levels),
-         
-         citizenship = as.factor(citizenship) %>%
-           fct_recode(!!!citizenship_levels),
-         
-         race = as.factor(race) %>%
-           fct_recode(!!!race_levels),
-         
-         military = as.factor(military) %>%
-           fct_recode(!!!military_levels),
-         
-         married = as.factor(married) %>%
-           fct_recode(!!!married_levels),
-         
-         children_age = as.factor(children_age) %>%
-           fct_recode(!!!children_age_levels),
-         
-         education = as.factor(education) %>%
-           fct_recode(!!!education_levels),
+           forcats::fct_recode(!!!sex_levels),
          
          employment = as.factor(employment) %>%
-           fct_recode(!!!employment_levels),
+           forcats::fct_recode(!!!employment_levels),
+         
+         race = as.factor(race) %>%
+           forcats::fct_recode(!!!race_levels),
+         
+         marital_status = as.factor(marital_status) %>%
+           forcats::fct_recode(!!!marital_status_levels),
          
          region = as.factor(region) %>%
-           fct_recode(!!!region_levels),
+           forcats::fct_recode(!!!region_levels),
          
          state = as.factor(state) %>%
-           fct_recode(!!!state_levels),
+           forcats::fct_recode(!!!state_levels),
          
-         gave_birth = ifelse(gave_birth == 1, TRUE, FALSE),
+         # for citizenship, 5 stands for not a citizen
+         citizenship = ifelse(citizenship == 5, "No", "Yes") %>% 
+           as.factor(),
          
-         stem_degree = ifelse(stem_degree == 1, TRUE, FALSE),
+         privilege = ifelse(race %in% c("White", "Asian"), "Yes", "No") %>%
+           as.factor(),
          
-         disabled = ifelse(disabled == 1, TRUE, FALSE),
+         # for military, 4 stands for never enlisted
+         military = ifelse(military == 4, "No", "Yes"),
+         military = ifelse(is.na(military), "No", military) %>%
+           as.factor(),
          
+         ever_married = ifelse(marital_status == "Single", "No", "Yes") %>% 
+           as.factor(),
+         
+         # for education, 22, 23, and 24 stand for graduate degrees
+         grad_degree = ifelse(education %in% c(22, 23, 24), "Yes", "No"),
+         grad_degree = ifelse(is.na(grad_degree), "No", grad_degree) %>%
+           as.factor(),
+         
+         # for STEMdegree, 1 stands for a STEM degree
+         stem_degree = ifelse(stem_degree == 1, "Yes", "No"),
+         stem_degree = ifelse(is.na(stem_degree), "No", stem_degree) %>%
+           as.factor(),
+         
+         disabled = ifelse(disabled == 1, "Yes", "No") %>% 
+           as.factor(),
+         
+         # Filling empty industry fields with NAs
+         industry = ifelse(industry == "", NA, industry),
          # Collapsing industry codes into broad NAICS sectors (only taking the first 
          # two digits of the NAICS code, which represent the broader industry sectors)
          industry = substr(industry, start = 1, stop = 2) %>%
@@ -341,13 +299,13 @@ ACS <- ACSRaw %>%
   
   # Filtering the individuals of interest
   filter(!(is.na(wage_income)) & wage_income > 0, # salary income is positive
-         employment %in% c("employed working",
-                           "employed not working",
-                           "military working"), # employed and/or working
+         employment %in% c("Employed working",
+                           "Employed not working",
+                           "Military working"), # employed and/or working
          age >= 18) %>% # only people over 18
   
   # Removing merged variables and those used for filtering or joining
-  select(-SERIALNO, -ADJINC, -employment, -degree_1, -degree_2)  %>%
+  select(-SERIALNO, -ADJINC, -employment, -education, -degree_1, -degree_2)  %>%
   
   # Dropping unused factor levels
   mutate_if(is.factor, fct_drop)
@@ -355,7 +313,7 @@ ACS <- ACSRaw %>%
 # -----------------------------------------------------------------------------
 
 # Saving the dataset
-saveRDS(ACS, file = "data/ACS.Rds")
+saveRDS(ACS, file = "data/ACSBig.Rds")
 
 # Freeing memory
 rm(list = ls())

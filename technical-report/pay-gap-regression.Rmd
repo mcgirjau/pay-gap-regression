@@ -1,11 +1,11 @@
 ---
 title: "A Regression Analysis of the Gender Pay Gap \\ (Technical Report)"
 author: "Maria-Cristiana Gîrjău"
-date: "Revised on 14 October 2019"
+date: "December 2019"
 output: 
   pdf_document:
-    fig_height: 3.5
-    fig_width: 6
+    fig_height: 3
+    fig_width: 5
     toc: TRUE
     number_sections: TRUE
 fontsize: 11pt
@@ -27,6 +27,9 @@ library(kableExtra)
 library(GGally)
 library(leaps)
 library(cowplot)
+library(tidyr)
+library(ggrepel)
+library(xtable)
 
 # Tweaks to adjust code chunk font size
 chunk_hook <- knitr::knit_hooks$get("chunk")
@@ -48,8 +51,8 @@ knitr::opts_chunk$set(
 # B&W ggplot2 theme
 theme_set(theme_bw())
 
-# Not using scientific notation
-options(scipen = 999)
+# Do not immediately use scientific notation
+options(scipen = 1)
 ```
 
 \newpage
@@ -62,32 +65,38 @@ Importing both the provided sample and the full original PUMS dataset (merged, p
 
 ```{r import}
 # Sample of 3000 to be wrangled in RMarkdown
-ACSSmall <- readr::read_csv("data/raw/acs230_3k.csv")
+ACSSmallRaw <- readr::read_csv("data/ACS3k.csv")
 
 # Full dataset (already wrangled, see .R script for details)
-# ACSBig <- readRDS("data/ACSBig.Rds")
+ACSBig <- readRDS("data/ACSBig.Rds")
 ```
 
 ## Preparation
 
 Preparing the levels for the factor variables we intend to recode.
 
-A lot of the variables will be heavily collapsed, in order to simplify the selection of a regression model. This has been performed in ways that make the most sense to our question at hand. 
-
-Race has been collapsed into two: races that are commonly viewed to benefit from systemic privilege (white and asian), and races that are underprivileged (all others - black, native american, pacific islander etc.).
-
-Citizenship has been rcollapsed into citizen or not citizen - where one was boorn (e.g. mainland US or overseas terirtories) is an unnecessary level of detail for our analysis.
-
-Married has been collapsed into single and ever married - it is assumed that marriage can take a toll on a woman's career.
-
-Education has been collapsed into no college degree, college degree, and graduate, a question of particular interest to me as a college student.
-
-Military is collapsed into yes part of the military or no.
-
 ```{r factors}
 # Setting factor levels
 sex_levels <- c(M = "1",
                 "F" = "2")
+
+# will only be used for tallying
+race_levels <- c(White = "1",
+                 Black = "2",
+                 Native = "3",
+                 Native = "4",
+                 Native = "5",
+                 Asian = "6",
+                 Native = "7",
+                 Other = "8",
+                 Multiple = "9")
+
+# will only be used for tallying
+marital_status_levels <- c(Married = "1",
+                           Widowed = "2",
+                           Divorced = "3",
+                           Separated = "4",
+                           Single = "5")
 
 # collapsing degree
 degree_levels <- c("Agriculture" = "11",
@@ -128,6 +137,7 @@ degree_levels <- c("Agriculture" = "11",
                    "Business and Finance" = "62",
                    "History" = "64")
 
+# will be used for filtering
 employment_levels <- c("Employed working" = "1",
                        "Employed not working" = "2",
                        Unemployed = "3",
@@ -229,18 +239,19 @@ Selecting the variables of interest (see the Data Dictionary in Appendix A for d
 
 ```{r variables}
 # Wrangling the data
-ACSSmall <- ACSSmall %>%
+ACSSmall <- ACSSmallRaw %>%
   
+  # Adjusting income
   mutate(ADJINC.x = ADJINC.x / 10^6, # adding decimal point to ADJINC
          WAGP = WAGP * ADJINC.x, # adjusting dollar amounts for inflation
-         HINCP = HINCP * ADJINC.x) %>% # adjusting dollar amounts for inflation
+         WAGP = round(WAGP)) %>% # rounding to nearest dollar
   
   # Selecting which variables to keep
   select(SEX, AGEP, CIT, RAC1P, MIL, DIS, # general demographics
-         NP, MAR, NRC, FER, # family and household
+         NP, MAR, NRC, # family and household
          SCHL, FOD1P, FOD2P, SCIENGP, # educational background
          ESR, WKHP, NAICSP, # employment
-         HINCP, WAGP, # income
+         WAGP, # income
          REGION.x, ST.x) %>% # location
   
   # Renaming the variables
@@ -251,9 +262,8 @@ ACSSmall <- ACSSmall %>%
          military = MIL,
          disabled = DIS,
          people_in_household = NP,
-         married = MAR,
+         marital_status = MAR,
          children = NRC,
-         gave_birth = FER,
          education = SCHL,
          degree_1 = FOD1P,
          degree_2 = FOD2P,
@@ -261,17 +271,22 @@ ACSSmall <- ACSSmall %>%
          employment = ESR,
          hours_per_week = WKHP,
          industry = NAICSP,
-         household_income = HINCP,
          wage_income = WAGP,
          region = REGION.x,
          state = ST.x) %>%
   
-  # Converting inputs to an appropriate data type
+  # Converting entries to the appropriate data types
   mutate(sex = as.factor(sex) %>%
            forcats::fct_recode(!!!sex_levels),
          
          employment = as.factor(employment) %>%
            forcats::fct_recode(!!!employment_levels),
+         
+         race = as.factor(race) %>%
+           forcats::fct_recode(!!!race_levels),
+         
+         marital_status = as.factor(marital_status) %>%
+           forcats::fct_recode(!!!marital_status_levels),
          
          region = as.factor(region) %>%
            forcats::fct_recode(!!!region_levels),
@@ -280,40 +295,50 @@ ACSSmall <- ACSSmall %>%
            forcats::fct_recode(!!!state_levels),
          
          # for citizenship, 5 stands for not a citizen
-         citizenship = ifelse(citizenship == 5, "N", "Y"),
+         citizenship = ifelse(citizenship == 5, "No", "Yes") %>% 
+           as.factor(),
          
-         # for race, 1 stands for White and 6 for Asian
-         race = ifelse(race %in% c(1, 6), "privileged", "underprivileged"),
+         privilege = ifelse(race %in% c("White", "Asian"), 
+                                 "Yes", "No") %>%
+           as.factor(),
          
          # for military, 4 stands for never enlisted
-         military = ifelse(military == 4, "N", "Y"),
+         military = ifelse(military == 4, "No", "Yes"),
+         military = ifelse(is.na(military), "No", military) %>%
+           as.factor(),
          
-         # for married, 5 stands for single
-         ever_married = ifelse(married == 5, "N", "Y"),
+         ever_married = ifelse(marital_status == "Single", "No", "Yes") %>% 
+           as.factor(),
          
          # for education, 22, 23, and 24 stand for graduate degrees
-         grad_degree = ifelse(education %in% c(22, 23, 24), "Y", "N"),
-
-         gave_birth = ifelse(gave_birth == 1, "Y", "N"),
+         grad_degree = ifelse(education %in% c(22, 23, 24), "Yes", "No"),
+         grad_degree = ifelse(is.na(grad_degree), "No", grad_degree) %>%
+           as.factor(),
          
-         stem_degree = ifelse(stem_degree == 1, "Y", "N"),
+         # for STEMdegree, 1 stands for a STEM degree
+         stem_degree = ifelse(stem_degree == 1, "Yes", "No"),
+         stem_degree = ifelse(is.na(stem_degree), "No", stem_degree) %>%
+           as.factor(),
          
-         disabled = ifelse(disabled == 1, "Y", "N"),
+         disabled = ifelse(disabled == 1, "Yes", "No") %>% 
+           as.factor(),
          
+         # Filling empty industry fields with NAs
+         industry = ifelse(industry == "", NA, industry),
          # Collapsing industry codes into broad NAICS sectors (only taking the first 
          # two digits of the NAICS code, which represent the broader industry sectors)
          industry = substr(industry, start = 1, stop = 2) %>%
            as.factor() %>%
-           forcats::fct_recode(!!!industry_levels),
+           fct_recode(!!!industry_levels),
          
          # Collapsing education codes into broader fields (only taking the first 
          # two digits of each code, which represent the broader field)
          degree_1 = substr(degree_1, start = 1, stop = 2) %>%
            as.factor() %>%
-           forcats::fct_recode(!!!degree_levels),
+           fct_recode(!!!degree_levels),
          degree_2 = substr(degree_2, start = 1, stop = 2) %>%
            as.factor() %>%
-           forcats::fct_recode(!!!degree_levels),
+           fct_recode(!!!degree_levels),
          # Merging the two degree variables, taking care of NAs and repeated values
          degree = ifelse(is.na(degree_1) | is.na(degree_2),
                          as.character(degree_1),
@@ -321,28 +346,31 @@ ACSSmall <- ACSSmall %>%
                                 as.character(degree_1),
                                 paste(degree_1, degree_2, sep = " and ")))) %>%
   
-  # Filtering the individuals to keep
+  # Filtering the individuals of interest
   filter(!(is.na(wage_income)) & wage_income > 0, # salary income is positive
          employment %in% c("Employed working",
                            "Employed not working",
                            "Military working"), # employed and/or working
          age >= 18) %>% # only people over 18
   
-  # Removing merged variables and those used for filtering
-  select(-employment, -degree_1, -degree_2, -education)  %>%
+  # Removing merged variables and those used for filtering or joining
+  select(-employment, -education, -degree_1, -degree_2)  %>%
   
   # Dropping unused factor levels
   mutate_if(is.factor, fct_drop)
-
-saveRDS(ACSSmall, file = "data/ACSSmall.Rds")
 ```
 
-```{r, remove, include=FALSE}
+```{r, remove, include=FALSE, echo=FALSE}
 # Removing unused variables
-rm()
+grep("levels", ls(), value = TRUE)
+rm(degree_levels, employment_levels, industry_levels, marital_status_levels,
+   race_levels, region_levels, sex_levels, state_levels,
+   ACSSmallRaw)
 ```
 
-# Data exploration
+\newpage
+
+# Data Exploration
 
 In this section, we will be exploring distributions and associations graphically and numerically, as a preparation for our model fitting and in order to better understand our data.
 
@@ -350,11 +378,12 @@ Let's take a look at the variables in our dataset.
 
 ```{r categorization}
 names(ACSSmall) %>% cat(sep = "\n")
+setequal(names(ACSBig), names(ACSSmall))
 ```
 
-Variables to be used for graphical exploration only (because they have many levels): state, industry, degree, region.
+Variables to be used for graphical exploration only (because they have too many levels): state, industry, degree, region.
 
-Variables to be used for our regression: sex, age (NUMERIC), citizenship, race, military, disabled, married, children (NUMERIC), stem_degree, hours_per_week (NUMERIC), people_in_household (NUMERIC)
+Variables to be used for our regression: wage_income (NUMERIC RESPONSE), sex, age (NUMERIC), citizenship, privilege, military, disabled, ever_married, children (NUMERIC), stem_degree, grad_degree, hours_per_week (NUMERIC), people_in_household (NUMERIC)
 
 ## Univariate Data Exploration
 
@@ -402,7 +431,8 @@ ggplot(ACSSmall, aes(x = race, fill= race)) +
 ACSSmall %>%
   favstats(~wage_income, data = .) %>%
   kable(booktabs = TRUE, caption = "Distribution of Wage Income",
-        col.names = c("Min", "Q1", "Median", "Q3", "Max", "Mean", "SD", "N", "Missing")) %>%
+        col.names = c("Min", "Q1", "Median", "Q3", "Max", 
+                      "Mean", "SD", "N", "Missing")) %>%
   kable_styling(latex_options = c("striped", "HOLD_position"))
 
 ggplot(ACSSmall, aes(x = wage_income)) + 
@@ -415,12 +445,16 @@ We notice that the distribution of wage income is strongly skewed right, so it w
 
 ```{r univariate_log_income_1, echo=FALSE}
 ACSSmall <- ACSSmall %>%
-  mutate(log_wage_income = log10(wage_income))
+  mutate(log_wage_income = log(wage_income))
+
+ACSBig <- ACSBig %>%
+  mutate(log_wage_income = log(wage_income))
 
 ACSSmall %>%
   favstats(~log_wage_income, data = .) %>%
   kable(booktabs = TRUE, caption = "Distribution of Log(Wage Income)",
-        col.names = c("Min", "Q1", "Median", "Q3", "Max", "Mean", "SD", "N", "Missing")) %>%
+        col.names = c("Min", "Q1", "Median", "Q3", "Max", 
+                      "Mean", "SD", "N", "Missing")) %>%
   kable_styling(latex_options = c("striped", "HOLD_position"))
 
 ggplot(ACSSmall, aes(x = log_wage_income)) + 
@@ -437,7 +471,8 @@ This looks much better, despite a slight left skew. We shall use ``log_wage_inco
 ACSSmall %>%
   favstats(~age, data = .) %>%
   kable(booktabs = TRUE, caption = "Distribution of Age",
-        col.names = c("Min", "Q1", "Median", "Q3", "Max", "Mean", "SD", "N", "Missing")) %>%
+        col.names = c("Min", "Q1", "Median", "Q3", "Max", 
+                      "Mean", "SD", "N", "Missing")) %>%
   kable_styling(latex_options = c("striped", "HOLD_position"))
 
 ggplot(ACSSmall, aes(x = age)) + 
@@ -470,13 +505,13 @@ ggplot(ACSSmall, aes(x = region, fill= region)) +
 
 ```{r univariate_married_1, echo=FALSE}
 ACSSmall %>%
-  group_by(married) %>%
+  group_by(marital_status) %>%
   tally() %>%
   kable(booktabs = TRUE, caption = "Distribution of Marital Status",
         col.names = c("Marital Status", "Tally")) %>%
   kable_styling(latex_options = c("striped", "HOLD_position"))
 
-ggplot(ACSSmall, aes(x = married, fill= married)) + 
+ggplot(ACSSmall, aes(x = marital_status, fill= marital_status)) + 
   geom_bar() + 
   labs(x = "Marital Status", y = "Count") +
   ggtitle("Distribution of Marital Status") +
@@ -488,115 +523,237 @@ ggplot(ACSSmall, aes(x = married, fill= married)) +
 
 In this section we take a multivariate approach to exploring our data.
 
-# Data Analysis
+```{r}
+ACSSmall %>%
+  group_by(privilege, sex) %>%
+  summarize(average_wage = mean(wage_income))
+```
 
-- add in bivariate explorations - how is income related with all of the variables, especially between men and women (color = sex)?
+```{r}
+ACSSmall %>%
+  ggplot(aes(x = age, y = log_wage_income, color = sex)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(x = "Age", y = "Log(Wage Income)")
+```
 
-Regression:
-- best subsets selection / forward selection
-- interaction terms?
-- analysis of the model - is everything linear?
-- F-test and z-test
-- LOG transformation
-- R squared - yes sex is significant, but it doesnt account for much variability, so its not practically significant
+It seems like men earn on average more than women of the same age, but the rate of change of log_wage_income as age increases is relatively the same for the two genders. We will later do a nested F test to see whether the rates of change are actually different, and whether we need two regression lines at all.
+
+```{r}
+ACSSmall %>%
+  ggplot(aes(x = hours_per_week, y = log_wage_income, color = sex)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(x = "Average Hours Worked per Week", y = "Log(Wage Income)")
+```
+
+It seems like the rate of change of log_wage_income as age increases is higher for women than for men. We will later do a nested F test to see whether the rates of change are indeed different, and whether we need two regression lines at all.
+
+```{r, fig.height=6, fig.width=9}
+ACSBig %>%
+  group_by(industry, sex) %>%
+  summarize(average_income = mean(wage_income)) %>%
+  spread(sex, average_income) %>%
+  rename(male_income = M, female_income = "F") %>%
+  mutate(difference = male_income - female_income) %>%
+  ggplot(aes(x = female_income, y = male_income, color = industry, size = difference)) + 
+    geom_point() +
+    geom_abline(slope = 1, intercept = 0, alpha = 0.5) +
+    geom_text_repel(aes(label = industry), size = 4, 
+                    segment.color = "transparent") +
+    expand_limits(x = 0, y = 0) +
+    labs(x = "Average Female Income", y = "Average Male Income") +
+    ggtitle("Average Income Difference between Men and Women, by Industry") +
+    theme(legend.position = "none")
+```
+
+\newpage
+
+# Modeling
+
+Having completed our variable exploration, we suspect that there is a significant association between wage income and gender. Now let us proceed by fitting a regression model, in order to find out which variables help us account for the variability in income, and more specifically whether gender is indeed a significant predictor thereof.
+
+## Choosing Predictors
+
+It is time to select predictors for our model. We shall use the best subsets procedure in order to find a model that accounts for the most variability in income, while also keeping matters simple.
 
 ```{r regression_variables}
 # Creating a dataset to be used for our predictor selection procedure
-ACSReg <- ACSSmall %>%
+ACSReg1 <- ACSSmall %>%
   # selecting the potential predictors...
-  select(sex, age, citizenship, race, military, disabled, ever_married, children, 
+  select(sex, age, citizenship, privilege, military, disabled, ever_married, children, 
          stem_degree, people_in_household, hours_per_week, grad_degree,
          # ... and the response
          log_wage_income)
 ```
 
 ```{r}
-output <- summary(leaps::regsubsets(log_wage_income ~ ., nbest = 1, data = ACSReg))
-subsets <- output$which
-R2adj <- round(100 * output$adjr2, 1)
-Cp <- round(output$cp, 1)
-BIC <- round(output$bic, 1)
-cbind(as.data.frame(subsets), R2adj, Cp, BIC) %>%
-  # we want the highest adjusted R squared
-  arrange(desc(R2adj)) %>% head(n = 5) %>%
+# Using best subsets method
+output <- leaps::regsubsets(log_wage_income ~ ., nbest = 1, data = ACSReg1)
+
+with(summary(output), data.frame(adjr2, cp, bic, outmat)) %>%
+  arrange(desc(adjr2)) %>%
+  rename(R2_adj = adjr2,
+         Cp = cp,
+         BIC = bic) %>%
+  mutate(R2_adj = round(R2_adj * 100, 2),
+         Cp = round(Cp, 2),
+         BIC = round(BIC, 2)) %>%
   t() %>%
-  unlist(use.names = TRUE) %>%
-  as.data.frame()
+  as.data.frame() %>%
+  kable(booktabs = TRUE, col.names = c("Model 1", "Model 2", "Model 3", 
+                                       "Model 4", "Model 5", "Model 6",
+                                       "Model 7", "Model 8")) %>%
+  kable_styling(latex_options = c("striped", "HOLD_position"), font_size = 9)
 ```
 
-Nice!! Would any transformations be of use?
+Our adjusted R squared is not bad, at 42.6\%. Mallows' Cp is a bit concerning, at 16.6 lowest. Let's see if any of our quantitative variables might benefit from the usage of a polynomial model.
 
-```{r}
-ggplot(ACSReg, aes(x = age, y = log_wage_income)) + 
-  geom_jitter() +
+```{r, fig.height=2, fig.width=8}
+p1 <- ggplot(ACSReg1, aes(x = age, y = log_wage_income)) + 
+  geom_jitter(size = 0.2, alpha = 0.5) +
   geom_smooth(se = FALSE, color = "red")
 
-ggplot(ACSReg, aes(x = people_in_household, y = log_wage_income)) + 
-  geom_jitter() +
+p2 <- ggplot(ACSReg1, aes(x = people_in_household, y = log_wage_income)) + 
+  geom_jitter(size = 0.2, alpha = 0.5) +
   geom_smooth(se = FALSE, color = "red")
 
-ggplot(ACSReg, aes(x = hours_per_week, y = log_wage_income)) + 
-  geom_jitter() +
+p3 <- ggplot(ACSReg1, aes(x = hours_per_week, y = log_wage_income)) + 
+  geom_jitter(size = 0.2, alpha = 0.5) +
   geom_smooth(se = FALSE, color = "red")
+
+cowplot::plot_grid(p1, p2, p3, nrow = 1)
 ```
 
-Age might benefit from a squared transformation:
+The relationship between ``log(income)`` and ``age`` is visibly curved, so we might want to consider a quadratic model.
 
 ```{r}
-ACSReg <- ACSReg %>%
-  mutate(age2 = age^2)
+cor(ACSReg1 %>% select(log_wage_income, children, people_in_household, age, 
+                       hours_per_week), use = "complete.obs") %>% 
+  kable(digits = 3, booktabs = TRUE, caption = "Correlation Matrix for Numeric Variables") %>%
+  kable_styling(latex_options = c("striped", "HOLD_position"), font_size = 9)
 ```
 
+The correlation matrix for our quantitative predictors also shows that ``people_in_household`` and ``children`` are highly correlated (0.744), so we might as well remove one of them to avoid multicollinearity in our final model. We remove ``children`` since it is less correlated with our response, ``log_wage_income`` (-0.040), than ``people_in_household`` (-0.144).
+
 ```{r}
-output <- summary(leaps::regsubsets(log_wage_income ~ ., nbest = 1, data = ACSReg))
-subsets <- output$which
-R2adj <- round(100 * output$adjr2, 1)
-Cp <- round(output$cp, 1)
-BIC <- round(output$bic, 1)
-cbind(as.data.frame(subsets), R2adj, Cp, BIC) %>%
-  # we want the highest adjusted R squared
-  arrange(desc(R2adj)) %>% head(n = 5) %>%
+ACSReg2 <- ACSReg1 %>%
+  # Adding in squared age as a predictor
+  mutate(ageSq = age^2) %>%
+  # Removing highly correlated predictor
+  select(-children)
+```
+
+Now let's run the best subsets procedure again:
+
+```{r}
+output <- leaps::regsubsets(log_wage_income ~ ., nbest = 1, data = ACSReg2)
+
+with(summary(output), data.frame(adjr2, cp, bic, outmat)) %>%
+  arrange(desc(adjr2)) %>%
+  rename(R2_adj = adjr2,
+         Cp = cp,
+         BIC = bic) %>%
+  mutate(R2_adj = round(R2_adj * 100, 2),
+         Cp = round(Cp, 2),
+         BIC = round(BIC, 2)) %>%
   t() %>%
-  unlist(use.names = TRUE) %>%
-  as.data.frame()
+  as.data.frame() %>%
+  kable(booktabs = TRUE, col.names = c("Model 1", "Model 2", "Model 3", 
+                                       "Model 4", "Model 5", "Model 6",
+                                       "Model 7", "Model 8")) %>%
+  kable_styling(latex_options = c("striped", "HOLD_position"), font_size = 9)
 ```
 
-This looks promising! Let's try to throw in some potential interaction terms.
+The adjusted R squared for the best model has increased from 42.7\% to 49\%, and Mallows' Cp has decreased to 10.6. The BIC has also decreased significantly from -645 to -812. This looks promising! Let's fit the corresponding model now.
 
 ```{r}
-output <- summary(leaps::regsubsets(log_wage_income ~ . + 
-                               race * hours_per_week + 
-                               grad_degree * age + 
-                               stem_degree * hours_per_week, nbest = 1, data = ACSReg))
-subsets <- output$which
-R2adj <- round(100 * output$adjr2, 1)
-Cp <- round(output$cp, 1)
-BIC <- round(output$bic, 1)
-cbind(as.data.frame(subsets), R2adj, Cp, BIC) %>%
-  # we want the highest adjusted R squared
-  arrange(Cp) %>% head(n = 5) %>%
-  t() %>%
-  unlist(use.names = TRUE) %>%
-  as.data.frame()
+initialModel <- lm(log_wage_income ~ sex + age + ageSq + citizenship + privilege +
+              stem_degree + hours_per_week + grad_degree, data = ACSReg2)
+msummary(initialModel)
 ```
 
+This looks good! All of our predictors are significant individually (see p-values for the t-statistics), as is our model as a whole (see p-value for the F-statistic). Let's now play around now using manual forward selection and see if any interaction terms might be of use. We will add the interaction between ``sex`` and ``hours_per_week`` since it adds the biggest increase in adjusted R squared.
+
 ```{r}
-bestModel <- lm(log_wage_income ~ age + age2 + sex * hours_per_week + grad_degree,
-                data = ACSReg)
+model <- lm(log_wage_income ~ sex * hours_per_week + age + ageSq + citizenship + 
+              privilege + stem_degree + grad_degree, data = ACSReg2)
+msummary(model)
+```
+
+This model looks good! We have 7 predictors. We could cut some for the interest of simplicity without too much of an impact on the adjusted R squared, but 7 predictors is not excessive so we shall leave all of them in.
+
+## Fitting Model
+
+We now fit our final model.
+
+```{r}
+bestModel <- lm(log_wage_income ~ sex * hours_per_week + age + ageSq + citizenship + 
+                  privilege + stem_degree + grad_degree, data = ACSReg2)
 msummary(bestModel)
 ```
 
-## Nested F-test
+## Confidence intervals
 
 ```{r}
-reducedModel <- lm(log_wage_income ~ age + age2 + hours_per_week + grad_degree, data = ACSReg)
-anova(reducedModel, bestModel)
-
-reducedModel <- lm(log_wage_income ~ age + age2 + sex + hours_per_week + grad_degree, data = ACSReg)
-anova(reducedModel, bestModel)
+(100 * (confint(bestModel) %>% exp() - 1))
 ```
 
+(exp(0.24002195) - 1) * 100
+(exp(0.23423660) - 1) * 100
+etc.
+
+\newpage
+
+# Analysis
+
+## Interpretation
+
+Let's interpret our model. Each of the coefficients are significant, so we interpret.
+
+Since our response is log-transformed, we will give our interpretation in terms of percentage change.
+
+Sex: coefficient of -0.85632199 so if you're a woman (adjusting for the other predictors) that is associated with a $(e^{-0.85632199} - 1) \cdot 100 = -57.52787\%$ lower wages than for men.
+
+log(income for man) = sth
+log(income for woman) = sth - 0.856
+log(income for woman) - log(income for man) = -0.856
+log(income for woman / income for man) = -0.856
+income for woman / income for man = e^(-0.856)
+so income for woman = income for man * e^(-0.856) = income for man * 0.4247213
+
+For a man, every additional 5 hours worked per week are associated with $(e^{5 \cdot 0.03369606} - 1) \cdot 100 = 18.35049\%$ higher wages. But for women, every additional 5 hours worked per week are only associated with $(e^{5 \cdot (0.03369606 - 0.01616058)} - 1) \cdot 100 = 28.31054\%$ higher wages! Interesting.
+
+## Nested F-test
+
+Now let's come back to our question of interest - does sex matter in predicting wage?
+
+```{r}
+bestModel <- lm(log_wage_income ~ sex * hours_per_week + age + ageSq + citizenship + 
+                  privilege + stem_degree + grad_degree, data = ACSReg2)
+reducedModel <- lm(log_wage_income ~ age + ageSq + hours_per_week + citizenship + 
+                     privilege + stem_degree + grad_degree, data = ACSReg2)
+anova(reducedModel, bestModel)
+
+reducedModel <- lm(log_wage_income ~ age + ageSq + sex + hours_per_week + citizenship + 
+                     privilege + stem_degree + grad_degree, data = ACSReg2)
+anova(reducedModel, bestModel)
+
+fullModel <- lm(log_wage_income ~ sex * hours_per_week + sex * age + age + ageSq +
+                  citizenship + privilege + stem_degree + grad_degree, 
+                data = ACSReg2)
+reducedModel <- lm(log_wage_income ~ sex * hours_per_week + age + ageSq + citizenship + 
+                  privilege + stem_degree + grad_degree, data = ACSReg2)
+anova(reducedModel, fullModel)
+```
+
+\newpage
+
 # Assessment
+
+## Conditions
+
+Diagnostic plots to check conditions:
 
 ```{r, fig.height=3, fig.width=10}
 diagnostic <- function(model, binwidth) {
@@ -634,6 +791,172 @@ diagnostic(bestModel, binwidth = NULL)
 
 Nice model - we like !!
 
+## Cross-validation Correlation
+
+```{r}
+set.seed(1)
+
+# Creating test dataset
+ACSTest <- sample(ACSBig %>% mutate(ageSq = age^2), size = 2000)
+
+# Computing predictions
+ACSTestPred <- ACSTest %>%
+  mutate(prediction = predict(bestModel, newdata = .)) %>%
+  select(log_wage_income, prediction)
+
+# Finding cross validation correlation
+cross_val_cor <- cor(ACSTestPred$log_wage_income, ACSTestPred$prediction)
+cross_val_cor
+
+# Plotting actual values against predictions
+ggplot(ACSTestPred, aes(x = log_wage_income, y = prediction)) + 
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(x = "Actual Value", y = "Predctions") +
+  ggtitle("Predictions vs. Actual Values")
+
+r_squared <- 0.5007
+shrinkage <- r_squared - cross_val_cor^2
+shrinkage
+```
+
+The cross validation correlation is not bad - over 70\%. Our model is accurate less than half the time This means that our predictive model is expected to perform decently in practice (i.e. when applied to data that was not used in our estimations).
+
+## Logistic Regression
+
+```{r}
+ACSLogit <- ACSSmall %>%
+  # selecting the potential predictors...
+  select(sex, age, citizenship, privilege, military, disabled, ever_married, children, 
+         stem_degree, people_in_household, hours_per_week, grad_degree,
+         # ... and the response
+         wage_income) %>%
+  # Adding in squared age as a predictor
+  mutate(ageSq = age^2) %>%
+  # Dichotomizing outcome
+  mutate(wealthy = ifelse(wage_income >= 120000, 1, 0) %>%
+           as.factor()) %>%
+  select(-wage_income)
+
+tally(ACSLogit$wealthy ~ ACSLogit$sex)
+```
+
+```{r}
+model1 <- glm(wealthy ~ ., data = ACSLogit, family = binomial(logit), 
+              na.action = na.exclude)
+msummary(model1)
+```
+
+Let's remove what seems most insignificant - citizenship and ever_married. People in household and children are highly correlated so we'll remove one.
+
+```{r}
+ACSLogit2 <- ACSLogit %>%
+  select(-ever_married, - citizenship)
+
+model2 <- glm(wealthy ~ ., data = ACSLogit2, family = binomial(logit), 
+              na.action = na.exclude)
+msummary(model2)
+
+model2a <- glm(wealthy ~ .-children, data = ACSLogit2, family = binomial(logit), 
+              na.action = na.exclude)
+
+model2b <- glm(wealthy ~ .-people_in_household, data = ACSLogit2, family = binomial(logit), 
+              na.action = na.exclude)
+msummary(model2a)
+msummary(model2b)
+```
+
+We remove people in household, as well as disabled and military.
+
+```{r}
+ACSLogit3 <- ACSLogit2 %>%
+  select(-people_in_household, -disabled, -military)
+
+model3 <- glm(wealthy ~ ., data = ACSLogit3, family = binomial(logit), 
+              na.action = na.exclude)
+msummary(model3)
+```
+
+Try to remove some more?
+
+```{r}
+ACSLogit4 <- ACSLogit3 %>%
+  select(-privilege, -children)
+
+model4 <- glm(wealthy ~ ., data = ACSLogit4, family = binomial(logit), 
+              na.action = na.exclude)
+msummary(model4)
+```
+
+No no, AIC grows. model3 looked good. Interactions? Trying some, no.
+
+```{r}
+model5 <- glm(wealthy ~ . + hours_per_week * stem_degree, data = ACSLogit3, family = binomial(logit), 
+              na.action = na.exclude)
+msummary(model5)
+```
+
+```{r}
+# Amy Wagaman's function to calculate coconcordance
+getConcordance <- function(model){
+  Con_Dis_Data <- cbind(model$y, model$fitted.values)
+  ones <- Con_Dis_Data[Con_Dis_Data[,1] == 1,]
+  zeros <- Con_Dis_Data[Con_Dis_Data[,1] == 0,]
+  conc <- matrix(0, dim(zeros)[1], dim(ones)[1])
+  disc <- matrix(0, dim(zeros)[1], dim(ones)[1])
+  ties <- matrix(0, dim(zeros)[1], dim(ones)[1])
+  for(j in 1:dim(zeros)[1]){
+    for(i in 1:dim(ones)[1]){
+      if(ones[i,2]>zeros[j,2]){
+        conc[j,i]=1
+      }else if(ones[i,2]<zeros[j,2]){
+          disc[j,i]=1
+      }else if(ones[i,2]==zeros[j,2]){
+        ties[j,i]=1
+      }
+    }
+  }
+  Pairs <- dim(zeros)[1]*dim(ones)[1]
+  PercentConcordance <- (sum(conc)/Pairs)*100
+  PercentDiscordance <- (sum(disc)/Pairs)*100
+  PercentTied <- (sum(ties)/Pairs)*100
+  return(list("Percent Concordance" = PercentConcordance,
+              "Percent Discordance" = PercentDiscordance,
+              "Percent Tied" = PercentTied,
+              "Pairs" = Pairs))
+}
+```
+
+```{r}
+getConcordance(model3)
+```
+
+```{r}
+ACSLogit3 <- mutate(ACSLogit3, predProb = predict(model, type = "response"),
+                    predComplete = ifelse(predProb > 0.9, 1, 0))
+# cross-tally predicted successes with actual success
+tally(data = ACSLogit3, wealthy ~ predComplete, margins = TRUE)
+```
+
+ADD EMPIRICAL LOGIT PLOTS
+
+Testing
+
+```{r}
+library(lmtest)
+lrtest(model3)
+```
+
+```{r}
+model3_nosex <- glm(wealthy ~ age + privilege + children + stem_degree + 
+                      hours_per_week + grad_degree + ageSq, 
+                    data = ACSLogit3, family = binomial(logit), 
+                    na.action = na.exclude)
+lrtest(model3_nosex, model3)
+```
+
+\newpage
+
 # Appendices
 
 <!--
@@ -645,7 +968,7 @@ Visualizations:
 
 - Z test to see if proportion of household income contributed by men's wages is significantly different than proportion of household income contributed by women's wages -->
 
-## Data Dictionary
+## Appendix A - Data Dictionary
 
 A number of variables have been identified as potentially relevant to the issue of the gender pay gap. Optimally, a careful consideration of each of them might provide us with a more precise understanding of the relationship between gender and income. However, only some of the variables below will make it into our final regression models - some will be used for filtering (e.g. \textbf{employment}), others are intended for creating meaningful visualizations (e.g. \textbf{state}, \textbf{industry}), and others might prove to have an insignificant effect on the relationship between gender and income.
 
@@ -654,7 +977,8 @@ In the list below, variables have been grouped under general topics, and we have
 \begin{enumerate}
     \item General demographics:
     \begin{enumerate}
-        \item \textbf{SEX} (renamed to \textbf{sex}) - \textit{``Sex''}
+        \item \textbf{SEX} (renamed to \textbf{sex}) - \textit{``Sex''} \\ 
+        (FACTOR WITH TWO LEVELS)
         \item \textbf{AGEP} (renamed to \textbf{age}) - \textit{``Age''}
         \item \textbf{CIT} (renamed to \textbf{citizenship}) - \textit{``Citizenship Status''}
         \item \textbf{RAC1P} (renamed to \textbf{race}) - \textit{``Recoded detailed race code''}
@@ -664,9 +988,7 @@ In the list below, variables have been grouped under general topics, and we have
     \item Family and household:
     \begin{enumerate}
         \item \textbf{MAR} (renamed to \textbf{married})- \textit{``Marital status''}
-        \item \textbf{HUPARC} (renamed to \textbf{children\_age}) - \textit{``Household presence and age of related children''}
         \item \textbf{NRC} (renamed to \textbf{children\_no}) - \textit{``Number of related children in household (unweighted)''}
-        \item \textbf{FER} - (renamed to \textbf{gave\_birth}) \textit{``Gave birth to child within the past 12 months''}
     \end{enumerate}
         \item Educational background:
     \begin{enumerate}
@@ -678,9 +1000,7 @@ In the list below, variables have been grouped under general topics, and we have
     \item Employment:
     \begin{enumerate}
         \item \textbf{ESR} (renamed to \textbf{employment}) - \textit{``Employment status recode''}
-        \item \textbf{COW} (renamed to \textbf{worker\_class}) - \textit{``Class of worker''}
-        \item \textbf{WKHP} (renamed to \textbf{hours\_worked}) - \textit{``Usual hours worked per week past 12 months'}
-        \item \textbf{WKW} (renamed to \textbf{weeks\_worked}) - \textit{``Weeks worked during past 12 months''}
+        \item \textbf{WKHP} (renamed to \textbf{hours\_per\_week}) - \textit{``Usual hours worked per week past 12 months'}
         \item \textbf{NAICSP} (renamed to \textbf{industry}) - \textit{``NAICS Industry recode for 2013 and later based on 2012 NAICS codes''}
     \end{enumerate}
     \item Income:
@@ -691,11 +1011,11 @@ In the list below, variables have been grouped under general topics, and we have
     \item Location:
     \begin{enumerate}
         \item \textbf{REGION} (renamed to \textbf{region}) - \textit{``Region code based on 2010 Census definitions''}
-        \item \textbf{ST} (renamed to \textbf{state}) - `\textit{`State Code based on 2010 Census definitions'}
+        \item \textbf{ST} (renamed to \textbf{state}) - \textit{``State Code based on 2010 Census definitions''}
     \end{enumerate}
 \end{enumerate}
 
-```{r eval=FALSE}
+```{r eval=FALSE, echo=FALSE, include=FALSE}
 # How many clusters would we need? Let's make an elbow plot...
 tot_withinss <- map_dbl(1:10,  function(k) {
   model <- kmeans(ACSBig %>% select(wage_income, age, children_no) %>% na.omit(), centers = k)
@@ -731,10 +1051,46 @@ ggplot(ACSBigClustered, aes(x = sex, fill = cluster)) +
 prop.table(table(ACSBigClustered$sex, ACSBigClustered$cluster), margin = 2) * 100
 ```
 
-## Another Appendix (B)
+## Appendix B - Code for Univariate Data Exploration
 
 The code from the Univariate Data Exploration section appears here.
 
-```{r univariate2, ref.label='univariate1', echo=TRUE, results='markup', eval=FALSE}
+### Sex
+
+```{r univariate_sex_2, ref.label='univariate_sex_1', echo=TRUE, results='markup', eval=FALSE}
+
+```
+
+### Race
+
+```{r univariate_race_2, ref.label='univariate_race_1', echo=TRUE, results='markup', eval=FALSE}
+
+```
+
+### Income
+
+```{r univariate_income_2, ref.label='univariate_income_1', echo=TRUE, results='markup', eval=FALSE}
+
+```
+
+```{r univariate_log_income_2, ref.label='univariate_log_income_1', echo=TRUE, results='markup', eval=FALSE}
+
+```
+
+### Age
+
+```{r univariate_age_2, ref.label='univariate_age_1', echo=TRUE, results='markup', eval=FALSE}
+
+```
+
+### Region 
+
+```{r univariate_region_2, ref.label='univariate_region_1', echo=TRUE, results='markup', eval=FALSE}
+
+```
+
+### Marital Status
+
+```{r univariate_married_2, ref.label='univariate_married_1', echo=TRUE, results='markup', eval=FALSE}
 
 ```

@@ -1,0 +1,412 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{titling, fancyhdr, parskip, csquotes, tabu, booktabs}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks = true,
+    linkcolor = black,
+    citecolor = black,
+    urlcolor = black
+}
+
+\usepackage[numbib]{tocbibind}
+\usepackage{apacite}
+\bibliographystyle{apacite}
+
+\usepackage{graphicx}
+\newcommand*\pct{\scalebox{.85}{\%}}
+
+\usepackage{setspace}
+\doublespacing
+
+\author{Maria-Cristiana Gîrjău}
+\date{December 2019}
+
+\pagestyle{fancy}
+\lhead{A Regression Analysis of the Gender Pay Gap}
+\rhead{Maria-Cristiana Gîrjău}
+
+\begin{document}
+
+% \title{Response to Feedback}
+% \maketitle
+
+% \newpage
+
+\begin{singlespace}
+    \title{A Regression Analysis of the Gender Pay Gap}
+    \maketitle
+    % \begin{abstract}
+    %   The abstract of the paper will go here upon submission of the final version.
+    % \end{abstract}
+    \tableofcontents
+\end{singlespace}
+
+\newpage
+
+\section{Background}
+
+We are all familiar with the infamous \textit{``gender pay gap"}, and have heard statements like \textit{``women earn just 79 cents for every dollar men make''} \cite{cnbc}. Allegedly, women are paid less than men for doing the same job in the US, and while the gap has been slowly narrowing each year, there is still a significant discrepancy between men and women's wages. These claims, however, are heavily disputed, and the pay gap has been called a ``myth'' and has been ``debunked'' in many articles all over the media. If real, the pay gap could be taken as proof of systemic sexism within American society, which constitutes a significant barrier to progress.
+
+What is the truth, and who should we believe? Surely, there must be more subtlety to the issue than the media conveys. Income and gender are not the only variables at play here, and many previous analyses bring in various other factors (many of them demographic) in an attempt to account for the complexity of the US population. For instance, an extensive investigation by the Economic Policy Institute claims that the pay gap is still noticeable regardless of race, age, citizenship, and education level \cite{epi}. Nevertheless, even when we read articles that bring in a more faceted interpretation of the pay gap, it is still at the writers' discretion which variables to pick and which to leave out. On top of that, as pointed out by the EPI article, ideological agendas frequently tend to find their way into the discussion, invariably leading to bias (whether implicit or explicit).
+
+This is why an individual exploration of the topic would be particularly valuable - one has more agency over the data, and as such can more easily view the issue from different angles. This report aims to investigate the factors that influence the wages of men and women respectively, with a specific focus on comparing and contrasting the two. Specifically, the goal is developing, refining, and critiquing regression models for predicting salary income, with a particular focus on the impact of gender and its interplay with other demographic aspects.
+
+\section{Data and Methods}
+
+\subsection{Sample}
+
+\subsubsection{Data Source}
+
+For this project, we will be using a random subsample of 3000 individuals from the 2017 1-year American Community Survey (ACS) Public Use Microdata Sample (PUMS) \cite{data}. From the US Census Bureau website:
+
+\begin{singlespace}
+    \begin{displayquote}
+        \textit{The American Community Survey (ACS) is an ongoing survey that provides vital information on a yearly basis about our nation and its people. [...] Through the ACS, we know more about jobs and occupations, educational attainment, veterans, whether people own or rent their homes, and other topics. [...] Public Use Microdata Sample (PUMS) files show the full range of population and housing unit responses collected on individual ACS questionnaires, for a subsample of ACS housing units and group quarters persons. [...] Each record in the file represents a single person. [...] PUMS files for an individual year, such as 2015, contain data on approximately one percent of the United States population.} \cite{about}
+    \end{displayquote}
+\end{singlespace}
+
+\subsubsection{Sample of Interest}
+
+From our subsample of 3000, we keep only the observations relevant to our question, namely employed or working individuals that are over 18 years of age and have reported a positive salary income for 2017. We also remove the self-employed individuals, since income differences between men and women who are self-employed are unlikely to be due to the alleged systemic discrimination that this investigation focuses on.
+
+\subsubsection{Demographics of the Sample}
+
+We obtain a final subsample of 1289 individuals to include in our analysis. Table \ref{demographics} contains information on the demographics of this sample of interest, with counts by category for the most representative qualitative variables, and summary statistics (minimum, median, maximum, IQR) for quantitative variables. Note that race and marital status have been collapsed into binary categories for our regression model (see section 2.2.3), and are shown here in full form simply for illustrative purposes.
+
+\begin{table}
+\centering
+\begin{tabu}{X[l]X[r]}
+    \toprule
+    \textbf{Sample size} & 1289 \\
+    
+    \midrule
+    
+    \textbf{Sex} & \\
+    \qquad Male & 700 (54.3\pct) \\
+    \qquad Female & 589 (45.7\pct) \\
+    
+    \textbf{Citizenship} & \\
+    \qquad US citizen & 1201 (93.2\pct) \\
+    \qquad Not US citizen & 88 (6.8\pct) \\
+    
+    \textbf{Race} & \\
+    \qquad Privileged & 1065 (82.6\pct) \\
+    \qquad \qquad White & 981 (76.1\pct) \\
+    \qquad \qquad Asian & 84 (6.5\pct) \\
+    \qquad Not privileged & 224 (17.4\pct) \\
+    \qquad \qquad African-American & 122 (9.5\pct) \\
+    \qquad \qquad Native American or Pacific Islander & 20 (1.6\pct) \\
+    \qquad \qquad Multiracial & 30 (2.3\pct) \\
+    \qquad \qquad Other & 52 (4.0\pct) \\
+    
+    \textbf{Military Enrollment} & \\
+    \qquad Enrolled & 107 (8.3\pct) \\
+    \qquad Not enrolled & 1182 (91.7\pct) \\
+    
+    \textbf{Disability} & \\
+    \qquad Disabled & 69 (5.4\pct) \\
+    \qquad Not disabled & 1220 (94.6\pct) \\
+    
+    \textbf{STEM Degree Holder} & \\
+    \qquad Yes & 169 (13.1\pct) \\
+    \qquad No & 1120 (86.9\pct) \\
+    
+    \textbf{Graduate Degree Holder} & \\
+    \qquad Yes & 193 (15.0\pct) \\
+    \qquad No & 1096 (85.0\pct) \\
+    
+    \textbf{Marital Status} & \\
+    \qquad Married at some point & 918 (71.2\pct) \\
+    \qquad \qquad Married & 740 (57.4\pct) \\
+    \qquad \qquad Widowed & 25 (1.9\pct) \\
+    \qquad \qquad Divorced & 133 (10.3\pct) \\
+    \qquad \qquad Separated & 20 (1.6\pct) \\
+    \qquad Never married & 371 (28.8\pct) \\
+    \qquad \qquad Single & 371 (28.8\pct) \\
+    
+    \textbf{Age (years)} & \\
+    \qquad Range (Min - Max) & 18 - 93 \\
+    \qquad Median & 44 \\
+    \qquad IQR & 23 \\
+    
+    \textbf{Average Hours Worked per Week} & \\
+    \qquad Range (Min - Max) & 1 - 90 \\
+    \qquad Median & 40 \\
+    \qquad IQR & 6 \\
+    
+    \textbf{Number of Children} & \\
+    \qquad Range (Min - Max) & 0 - 8 \\
+    \qquad Median & 0 \\
+    \qquad IQR & 1 \\
+    
+    \textbf{Number of People in Household} & \\
+    \qquad Range (Min - Max) & 1 - 12 \\
+    \qquad Median & 3 \\
+    \qquad IQR & 2 \\
+    
+    \bottomrule
+\end{tabu}
+\caption{\textbf{Demographics of the sample of interest.} Summaries are counts (percents) for categorical variables, while for quantitative variables we include the median, IQR, and range (minimum to maximum).}
+\label{demographics}
+\end{table}
+
+\subsection{Variables}
+
+\subsubsection{Outcome}
+
+The natural logarithm of salary income will be used as our response variable, partly due to the extreme right skew this variable exhibits, but also because income is better considered on a multiplicative rather than additive scale. In other words, \$1,000 is worth a lot more to a poor person than to a millionaire because \$1,000 is a much greater \textit{fraction} of the poor person's wealth \cite{faraway}. From now on, references to salary income as the response variable within a regression model should be implicitly understood as the logarithm thereof.
+
+\subsubsection{Potential Predictors}
+
+The variables that have been identified as potential predictors for salary income are gender (the main predictor under investigation), age, citizenship status within the US, racial privilege (see section 2.2.3), military enrollment, disability status, whether one was ever married, the number of children in the household, the number of people in the household, whether one has a STEM degree, whether one has a graduate degree, and the average number of hours worked per week. 
+
+\subsubsection{Note on Variable Simplification}
+
+A lot of the categorical variables as included in the original ACS PUMS dataset have a large amount of levels (e.g. educational attainment has 24). While variables such as these are desirable to include when modeling salary income, we would want to avoid not only an unnecessary amount of detail, but also overcomplicating the predictor selection stage of regression modeling. As a consequence, many of the factor levels will be heavily collapsed, with the aim of mutating each categorical variable into a flag of some sort. In doing so, great care has been taken so that each flag is sensible and meaningful when it comes to the response we are modeling (wage income), as well as to the general issue we are investigating (the gender pay gap). Also note that collapsing all categorical variables into binary ones eliminates the need to perform post-hoc comparisons on the predictors - the individual coefficient tests suffice for a complete analysis.
+
+Citizenship has been collapsed into whether an individual is a US citizen or not; military enrollment has been collapsed into whether one has ever been part of the US military or not; marital status has been collapsed into whether one has ever been married or not; and educational attainment has been collapsed into whether one has a graduate degree or not. 
+
+Finally, race has also been collapsed into two: races that are commonly viewed to benefit from systemic privilege in terms of higher-than-average income (white and Asian), and races that are systemically underprivileged (black, native American etc.) \cite{aei, wip}. While not strictly politically correct, this division reflects reality most accurately, especially considering that salary income is our response variable - we aren't as interested in race alone as we are in its relationship with income.
+
+\subsection{Procedural Outline}
+
+\subsubsection{Multiple Linear Regression}
+
+Multiple linear regression has been used to model salary income based on a variety of potential predictors (see section 2.2.2 for a comprehensive list). To produce the most reasonable model (i.e. the one that accounts for the most variability in income), various techniques for choosing predictors were employed (namely, best subsets for single predictors, and forward selection for interaction terms). The competing models were compared in terms of how successful they are at explaining income variability, as well as in terms of their simplicity. Only the predictors that displayed a significant association with income (after adjusting for the effects of other variables) have been kept in the final model (as assessed via individual t-tests).
+
+Using the model we have fit, our main focus then turned to the question of interest, namely whether gender is an effective predictor of income, especially in conjunction with other variables. Questions under survey included: do men earn more on average than women, and if so, does pay increase at a higher rate for men than for women (as suggested by the ``glass ceiling'' concept)? If there are indeed significant differences in income between the two genders, how pronounced are they, and should we be concerned? Interpretations have been provided in context, along with the appropriate confidence intervals. Both theoretical and practical significance have been considered in order to draw an informed conclusion.
+
+\subsubsection{Multiple Logistic Regression}
+
+A logistic regression model has also been fit using backwards selection procedures, after dichotomizing the outcome. We have turned our attention to the interplay between gender and whether one is ``very wealthy'' (where the cutoff for being very wealthy has been chosen at \$120,000). Both Wald z-tests and Likelihood Ratio Tests have been used in order to assess the significance of each of the aforementioned predictors in our model, with a specific focus on gender. Are men more likely to be very wealthy than women? If so, how much more likely? As with the multiple regression model, contextual interpretation has been provided.
+
+\section{Results}
+
+\subsection{Linear Regression Model}
+
+Of the initial 12 variables under consideration (see section 2.2), our final model only includes 7 of these in order to predict salary income - namely age, sex, citizenship status, whether one has a STEM degree, whether one has a graduate degree, number of hours worked per week, and racial privilege. The relationship between salary income and age has been observed to be curved, so the final model is quadratic on age. This makes sense in context - income tends to be lower for both very young individuals (for lack of experience), and for the elderly (many of whom have less workpower), so our model had to be adjusted appropriately. We have also included an interaction term between sex and the number of hours worked per week. Attempts have been made at adding other interaction terms, such as between sex and age, however none of them turned out to be significant and as such were not included in the final model.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llllr}
+  \toprule
+  & Estimate & Std. Error & t value & Pr($\,>|\,t\,|$) \\ 
+  \midrule
+  (Intercept) & 6.1385 & 0.2108 & 29.12 & $< 2 \cdot 10^{-16}$ \\ 
+  sexF & -0.8563 & 0.1551 & -5.52 & $4.05 \cdot 10^{-8}$ \\ 
+  hours\_per\_week & 0.0337 & 0.0026 & 13.06 & $< 2 \cdot 10^{-16}$ \\ 
+  age & 0.1118 & 0.0088 & 12.66 & $< 2 \cdot 10^{-16}$ \\ 
+  ageSq & -0.0011 & 0.0001 & -11.08 & $< 2 \cdot 10^{-16}$ \\ 
+  citizenshipYes & 0.2400 & 0.0829 & 2.89 & 0.0039 \\ 
+  privilegeYes & 0.2342 & 0.0552 & 4.25 & $2.33 \cdot 10^{-5}$ \\ 
+  stem\_degreeYes & 0.3366 & 0.0671 & 5.01 & $6.11 \cdot 10^{-7}$ \\ 
+  grad\_degreeYes & 0.4018 & 0.0639 & 6.29 & $4.39 \cdot 10^{-10}$ \\ 
+  sexF $\cdot$ hours\_per\_week & 0.0162 & 0.0038 & 4.29 & $1.91 \cdot 10^{-5}$ \\ 
+  \bottomrule \\
+  Residual standard error: 0.7395 & & $R^2 = 0.5007$ &  & $R^2_{adj} = 0.4972$ \\
+  F-statistic = 142.5 on 9 and 1279 df & & p-value $< 2 \cdot 10^{-16}$
+\end{tabular}
+\caption{\textbf{Linear Model Summary.} Final 7-predictor model for estimating the logarithm of salary income, based on a variety of demographic predictors.}
+\label{linear_model}
+\end{table}
+
+Our model as a whole appears to be effective at accounting for a significant amount of variability in salary income ($R^2_{adj} = 0.497$, $F = 142.5$, p-value $\ll 0.001$). Essentially half of the variation in how much US workers were paid in 2017 has been successfully captured by our regression. Each predictor also turned out to be individually significant within the model, after adjusting for the effects of other included variables. (corresponding p-values $\ll 0.01$).
+
+\subsubsection{Interpretations}
+
+Since our response variable, salary income, has had a natural logarithm transformation applied to it, the most appropriate practical interpretation is in terms of average percentage change.
+
+According to our model, women earn on average 57.5\pct \, less than men, after adjusting for the effects of other factors (95\pct \, CI: $\left[-42.4\pct, -68.7\pct\right]$, p-value $\ll 0.001$). One's gender has more of an impact on income than citizenship status (with citizens earning an average of 27.1\pct \, more than non-citizens) and racial privilege (with racially privileged individuals earning an average of 26.4\pct \, more than the racially underprivileged), while allowing for the effects of other predictors.
+
+One's education also makes a difference - individuals holding STEM degrees earn an average of 40.0\pct \, more than their peers without a STEM degree, while holding a graduate degree pushes one's income to an average of 49.5\pct \, more. Still, being female impacts one's earnings more than the educational background. 
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llr}
+  \toprule
+  & 2.5\pct & 97.5\pct \\ 
+  \midrule
+  sexF & -68.67 & -42.43 \\ 
+  citizenshipYes & 8.04 & 49.59 \\ 
+  privilegeYes & 13.43 & 40.84 \\ 
+  stem\_degreeYes & 22.73 & 59.72 \\ 
+  grad\_degreeYes & 31.85 & 69.42 \\ 
+  \bottomrule
+\end{tabular}
+\caption{\textbf{Confidence Intervals.} 95\pct \, confidence intervals for the percent change in income for each categorical predictor (namely for a ``yes'' response to each predictor)}
+\label{confint}
+\end{table}
+
+\subsubsection{Differences between Men and Women}
+
+As mentioned in the previous section, our model estimates that a woman earns, on average, a salary that is 57.5\% lower than a man's, controlling for other variables such as age, the amount of time worked per week, and whether one has a graduate degree. But is this difference significant? Comparing a model including sex as a predictor with a model excluding it altogether, we conclude that sex is indeed an overall significant predictor of salary income ($F = 22.192$ on $2 \, df$, p-value $\ll 0.001$).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccccc}
+  \toprule
+  & Res.Df & RSS & Df & Sum of Sq. & F & Pr($>$F) \\ 
+  \midrule
+  Reduced Model & 1281 & 723.71 &  &  &  &  \\ 
+  Full Model & 1279 & 699.44 & 2 & 24.272 & 22.192 & $3.353 \cdot 10^{-10}$ \\ 
+  \bottomrule
+\end{tabular}
+\caption{\textbf{Nested F-test (sex).} Assessing the overall significance of sex as a predictor}
+\label{f_test_1}
+\end{table}
+
+However, it seems that women's wages grow faster than men's as the number of hours worked per week increases. More specifically, we have found that men's wages grow by, on average, 18.4\pct \, for every additional 5 hours worked, while for women the increase in salary stands at an average of 28.3\pct \, per additional 5 hours worked. Assessing whether such a difference is significant, we conclude that indeed the rate of income growth as the number of hours worked per week increases is different between men and women ($F = 18.411$ on $1 \, df$, p-value $\ll 0.001$).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccccc}
+  \toprule
+  & Res.Df & RSS & Df & Sum of Sq. & F & Pr($>$F) \\ 
+  \midrule
+  Reduced Model & 1280 & 709.51 &  &  &  &  \\ 
+  Full Model & 1279 & 699.44 & 1 & 10.069 & 18.411 & $1.914 \cdot 10^{-5}$ \\ 
+  \bottomrule
+\end{tabular}
+\caption{\textbf{Nested F-test (sex $\cdot$ hours\_per\_week).} Assessing the significance of sex in relationship to the average number of hours worked per week}
+\label{f_test_2}
+\end{table}
+
+Another possible interaction that has been considered is that between sex and age - do men and women's wages increase at different rates throughout the years? Comparing a model that includes such an interaction term between sex and age with a simpler model that does not, we conclude that the rate of income growth does \textit{not} differ among men and women as they grow older ($F = 0.03$ on $1 \, df$, p-value = 0.8582).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccccc}
+  \toprule
+  & Res.Df & RSS & Df & Sum of Sq & F & Pr($>$F) \\ 
+  \midrule
+  Reduced Model & 1279 & 699.44 &  &  &  &  \\ 
+  Full Model & 1278 & 699.42 & 1 & 0.02 & 0.03 & 0.8582 \\ 
+  \bottomrule
+\end{tabular}
+\caption{\textbf{Nested F-test (sex $\cdot$ age).} Assessing the significance of sex in relationship to one's age}
+\label{f_test_3}
+\end{table}
+
+\subsubsection{Note on Model Accuracy}
+
+To assess our model accuracy, we have extracted a 2000-individual test sample from the full ACS PUMS dataset, and compared salary income predictions as made by our model with the actual reported income values. The cross validation correlation of predicted versus actual values stands at around 70\pct\, - a rather decent value for estimating a variable as irregular as income. Corresponding shrinkage for our model is very low, at 1.03\pct. This means that our model performs reasonably well when applied to new data.
+
+\subsection{Logistic Regression Model}
+
+From the initial 12 variables under consideration (see section 2.2), our final logistic regression model again includes 7 of these in order to predict one's likelihood of being very wealthy (i.e. wage income over \$120,000), namely age, sex, whether one has a STEM degree, whether one has a graduate degree, number of hours worked per week, racial privilege, and number of children in the household. The relationship between salary income and age has been observed to be curved, so the final model is quadratic on age (just like the linear regression model). No interaction terms were considered worthy of being added to the final model.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{llllr}
+  \toprule
+  & Estimate & Std. Error & z value & Pr($\,>|\,z\,|$) \\ 
+  \midrule
+  (Intercept) & -17.4482 & 2.5632 & -6.81 & $9.96 \cdot 10^{-12}$ \\ 
+  sexF & -0.8924 & 0.2622 & -3.40 & 0.000665 \\ 
+  age & 0.4370 & 0.1004 & 4.35 & $1.36 \cdot 10^{-5}$ \\ 
+  privilegeYes & 0.8640 & 0.4123 & 2.10 & 0.036122 \\ 
+  children & 0.2690 & 0.1033 & 2.61 & 0.009185 \\ 
+  stem\_degreeYes & 1.2801 & 0.2734 & 4.68 & $2.85 \cdot 10^{-6}$ \\ 
+  hours\_per\_week & 0.0550 & 0.0114 & 4.81 & $1.54 \cdot 10^{-6}$ \\ 
+  grad\_degreeYes & 1.2078 & 0.2656 & 4.55 & $5.43 \cdot 10^{-6}$ \\ 
+  ageSq & -0.0040 & 0.0010 & -3.92 & $8.70 \cdot 10^{-5}$ \\ 
+  \bottomrule \\
+  Null deviance: 698.75  on 1260  degrees of freedom & & AIC: 535.36 \\
+  Residual deviance: 517.36  on 1252  degrees of freedom & &
+\end{tabular}
+\caption{\textbf{Logistic Model Summary.} Final 7-predictor model for estimating the likelihood of being very wealthy (i.e. yearly salary above \$120,000), based on a variety of demographic predictors.}
+\label{model_logistic}
+\end{table}
+
+To see if the model is overall effective at predicting whether an individual is very wealthy or not, we conducted an overall Likelihood Ratio Test and concluded that indeed, our model is significant ($\chi^2 = 181.39$ on $8 \, df$, p-value $\ll 0.001$).
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{lrrrrr}
+  \toprule
+  & Df & log(Likelihood) & Df & $\chi^2$ & Pr($\,> \chi^2$) \\ 
+  \midrule
+  1 & 9 & -258.68 &  &  &  \\ 
+  2 & 1 & -349.37 & -8 & 181.39 & $< 2 \cdot 10^{-16}$ \\ 
+  \bottomrule
+\end{tabular}
+\caption{\textbf{Overall Likelihood Ratio Test.}}
+\label{lrt1}
+\end{table}
+
+The Wald z-tests as retrieved from Table \ref{model_logistic} indicate that all of our predictors are individually significant as well. While nested likelihood ratio tests tend to be more accurate at assessing the significance of individual predictors, they are not included in this paper since they would add unnecessary bulk.
+
+\subsubsection{Interpretations}
+
+According to our model, men are, on average 2.44 times more likely than women to earn over \$120,000 a year, after adjusting for the effects of other factors. (95\pct \, CI: $\left[1.47, 4.17\right]$, p-value $\ll 0.001$). In contrast, racially privileged individuals are, on average, 2.37 times more likely to be very wealthy.
+
+Unsurprisingly, one's education also makes a difference - individuals holding STEM degrees are, on average, 3.60 times more likely to be very wealthy than their peers without a STEM degree, while holding a graduate degree increases one's odds by a factor of 3.35.
+
+Surprisingly, with every additional child in the household, one's odds of earning over \$120,000 a year are 1.31 times higher, which also happens to be the magnitude of the increase that is associated with every additional 5 hours worked per week.
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{rrr}
+  \toprule
+  & 2.5\pct & 97.5\pct \\ 
+  \midrule
+  sexF & 0.24 & 0.68 \\ 
+  privilegeYes & 1.12 & 5.73 \\ 
+  stem\_degreeYes & 2.10 & 6.14 \\ 
+  grad\_degreeYes & 1.98 & 5.62 \\ 
+  \bottomrule
+\end{tabular}
+\caption{\textbf{Confidence Intervals.} 95\pct \, confidence intervals for the odds ratio of being very wealthy, for each categorical predictor (namely for a ``yes'' response to each predictor)}
+\label{confint_logistic}
+\end{table}
+
+\subsubsection{Differences between Men and Women}
+
+As mentioned in the previous section, our model estimates that men are, on average 2.44 times more likely than women to earn over \$120,000 a year, controlling for other variables such as age, the amount of time worked per week, and whether one has a graduate degree. But is this difference significant? Comparing a model including sex as a predictor with a model excluding it altogether, a nested LRT reveals that there is indeed a significant association between gender and on how likely it is for one to be very wealthy ($\chi^2 = 12.52$ on $1 \, df$, p-value $\ll 0.001$).
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{lrrrrr}
+  \toprule
+  & Df & log(Likelihood) & Df & $\chi^2$ & Pr($\,> \chi^2$) \\ 
+  \midrule
+  1 & 8 & -264.94 &  &  &  \\ 
+  2 & 9 & -258.68 & 1 & 12.52 & 0.0004016 \\ 
+  \bottomrule
+\end{tabular}
+\caption{\textbf{Nested Likelihood Ratio Test for sex.}}
+\label{lrt1}
+\end{table}
+
+\subsubsection{Note on Model Accuracy}
+
+To assess the accuracy of our logistic regression model, we have computed the concordance of our model, which stands at around 86.1\pct. This is a reasonably high value, however it is not particularly impressive since a confusion matrix reveals that our model classifies everyone as not being wealthy. This is because, from our initial sample of 1289, 1189 are not wealthy according to our definition, and 100 are. As such, 7.8\pct \, of people are wealthy, which is a very low rate, and our model creates the illusion of performing very effectively by swallowing all individuals into the ``non-wealthy'' category.
+
+\section{Conclusions}
+
+\subsection{Final Words on the Gender Pay Gap}
+
+The aim of this study was to investigate the existence and severity of the alleged gender pay gap. The conclusion we have reached based on a rigorous analysis of our data is that the gender pay gap is indeed real, and not only is it statistically significant, but the income difference estimated to 57\pct \, is dramatic enough to be concerning in practice as well. Women seem to earn, on average, \textit{less than half} of what men within a similar demographic earn.
+
+Frequently we hear of people attributing this disparity to things like women not majoring in STEM fields as much as men, or generally being less educated. The practical significance of our findings is exacerbated once we note that our model invalidates such explanations - we have controlled for these factors and still found a striking difference in income. The pay gap affects even highly-educated women holding STEM degrees, as has been confirmed in previous literature. \cite{epi}
+
+It is also interesting to note that men are 2.44 times more likely than women to be very wealthy (i.e. to earn over \$120,000 a year). Again, this is after controlling for the effects of having a STEM degree, having a graduate degree, being racially privileged etc. This suggests that there is indeed a concerning disparity between men and women's wages - women seem to be highly disadvantaged when it comes to attaining the top wages, even though they may be appropriately qualified. 
+
+\subsection{Limitations}
+
+By removing missing income values, it is possible that we introduced some bias in our analysis, since unwillingness to declare earnings might be associated with a specific subgroup of the population, such as either very poor or very rich individuals. Unfortunately, we have no way to adjust for such missing values - we are limited to fitting models only based on the data we do have. 
+
+Another potential limitation could be the collapsing of multi-level factors into binary flags, which does not fully capture the complexity of real life. Either way, however, one could always keep subdividing categorical variables and stratifying society in infinitely many ways in an attempt to capture more and more of the variability in income, but our model has struck a healthy balance between being relatively accurate (with a rough success rate of 70\pct \, for new predictions) and not overly complicated.
+
+\subsection{Improvements and Future Directions}
+
+Future investigations of the gender pay gap could be focused on a specific industry, such as Legal Services or Healthcare. One could also perform a similar analysis for specific college majors - do men majoring in Computer Science earn more than women holding an equivalent degree? To drill in even further on the pay gap, one could investigate how income differences vary among the races - is the pay gap wider for black women than for white women, and if so, is the difference statistically significant? Other variables could also be included in the selection pool for future models, such as region (urban or rural), religious beliefs, and political orientation, in an attempt to account for more of the variability in salary income and discover previously unthought-of connections.
+
+\begin{singlespace}
+    \bibliography{final-report}
+\end{singlespace}
+
+\end{document}
